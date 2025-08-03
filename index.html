@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <!--<meta charset="UTF-8" />-->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>모쿠로 이미지 뷰어</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 파일 불러오기 -->
+  <input type="file" id="folder-input" hidden webkitdirectory multiple />
+  <input type="file" id="json-input" hidden accept=".mokuro" />
+  <input type="file" id="zip-input" hidden accept=".zip" />
+
+  <!-- 이미지 & 오버레이 출력 영역 -->
+  <!-- overlay-container = 이미지 위에 흰색 (.textbox)를 겹쳐 그려 넣는 ‘오버레이(overlay)’ 전용 컨테이너입니다. --> 
+  <div id="viewer-container">
+    <img id="viewer" src="" />
+    <div id="overlay-container"></div>
+  </div>
+
+  <!-- 클릭 영역: 왼쪽 15%, 오른쪽 15% -->
+  <div id="click-left" class="click-zone"></div>
+  <div id="click-right" class="click-zone"></div>
+
+  <!-- 좌측 컨트롤 바 -->
+  <div class="controls">
+    <button id="pick-zip" >ZIP선택</button>
+    <button id="pick-folder" >폴더 선택</button>
+    <button id="load-json" >Mokuro 파일 선택</button>
+    <button id="toggle-mode" disabled>웹툰모드 켜기</button>
+    <button id="prev" disabled>이전</button>
+    <button id="next" disabled>다음</button>
+    <button id="fit-width" disabled>Fit to Width</button>
+    <button id="fit-screen" disabled>Fit to Screen</button>
+    <button id="original" disabled>Original</button>
+    <button id="zoom-out" disabled>-</button>
+    <button id="zoom-in" disabled>+</button>
+  </div>
+
+  <!-- 우측 숨기기 버튼 생성-->
+  <button id="toggle-controls-btn">컨트롤 숨기기</button>
+  <button id="toggle-text-btn">텍스트 숨기기</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
+  <script src="viewer.js"></script>  
+</body>
+</html>
