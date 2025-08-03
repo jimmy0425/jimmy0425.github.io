@@ -29,8 +29,8 @@ singleImg.addEventListener('load', () => {
 let files = [];       //이미지 파일들
 let currentIndex = 0; 
 let isWebtoonMode = false;
-//let displayMode = 'fit-screen';
-let displayMode = 'original';
+let displayMode = 'fit-width';
+//let displayMode = 'original';
 let zoomFactor = 1;
 let mokuroData = null;
 
@@ -326,5 +326,6 @@ hideTextButton.addEventListener('click', () => {
   hideTextButton.textContent = isTextHidden ? '텍스트' : '텍스트';
   console.log(isTextHidden);
 });
+
 
 
