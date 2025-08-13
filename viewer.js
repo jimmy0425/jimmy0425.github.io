@@ -1,60 +1,110 @@
+// viewer.js (메모리 안전 버전)
 document.addEventListener('DOMContentLoaded', () => {
-  // 1. 애플리케이션 상태 관리
+  // ====== 1) 상태 ======
+  const MAX_CACHE = 8; // 보유할 최대 페이지 수(가시 범위 + 버퍼)
   const state = {
-    imageEntries: [], // [변경] File 객체 대신 zip Entry나 파일 정보를 저장
+    // pages: [{ name, getBlob: () => Promise<Blob> }]
+    pages: [],
     ocrData: null,
-    zip: null, // [추가] 로드된 zip 객체를 저장하기 위함
     currentIndex: 0,
     isWebtoonMode: false,
-    displayMode: 'original',
+    displayMode: 'original', // 'fit-width' | 'fit-screen' | 'original'
     zoomFactor: 1.0,
     isTextOverlayVisible: true,
     areControlsVisible: true,
-    activeBlobUrls: new Map(), // [추가] 메모리 관리를 위해 생성된 Blob URL을 추적
-    webtoonState: { loadedUntilIndex: -1 }, // [추가] 웹툰 모드 스크롤 상태
+
+    // object URL LRU 캐시
+    cache: new Map(),         // index -> { url }
+    cacheOrder: [],           // 최근 사용 순서 (뒤가 최신)
+    io: null,                 // 웹툰 모드 IntersectionObserver
   };
 
-  // 2. DOM 요소 캐싱 (변경 없음)
-  const domElements = {
+  // ====== 2) DOM ======
+  const dom = {
     selectZipButton: document.getElementById('pick-zip'),
     zipInputElement: document.getElementById('zip-input'),
     selectFolderButton: document.getElementById('pick-folder'),
     folderInputElement: document.getElementById('folder-input'),
     selectMokuroButton: document.getElementById('load-json'),
     mokuroInputElement: document.getElementById('json-input'),
+
     toggleModeButton: document.getElementById('toggle-mode'),
     previousButton: document.getElementById('prev'),
     nextButton: document.getElementById('next'),
+
     fitWidthButton: document.getElementById('fit-width'),
     fitScreenButton: document.getElementById('fit-screen'),
     originalSizeButton: document.getElementById('original'),
     zoomInButton: document.getElementById('zoom-in'),
     zoomOutButton: document.getElementById('zoom-out'),
+
     viewerContainer: document.getElementById('viewer-container'),
     overlayContainer: document.getElementById('overlay-container'),
     singleImageElement: document.getElementById('viewer'),
+
     leftClickZone: document.getElementById('click-left'),
     rightClickZone: document.getElementById('click-right'),
+
     controlsContainer: document.querySelector('.controls'),
     toggleControlsButton: document.getElementById('toggle-controls-btn'),
     toggleTextButton: document.getElementById('toggle-text-btn'),
   };
 
-  let webtoonObserver; // [추가] 웹툰모드 Intersection Observer
+  // ====== 3) 유틸: 캐시 & URL 정리 ======
+  function touchCacheIndex(idx) {
+    const pos = state.cacheOrder.indexOf(idx);
+    if (pos !== -1) state.cacheOrder.splice(pos, 1);
+    state.cacheOrder.push(idx);
+  }
+  function addCache(idx, url) {
+    state.cache.set(idx, { url });
+    touchCacheIndex(idx);
+    evictIfNeeded();
+  }
+  function evictIfNeeded() {
+    while (state.cacheOrder.length > MAX_CACHE) {
+      const evictIdx = state.cacheOrder.shift();
+      const entry = state.cache.get(evictIdx);
+      if (entry) {
+        try { URL.revokeObjectURL(entry.url); } catch {}
+        state.cache.delete(evictIdx);
+      }
+    }
+  }
+  function clearAllCache() {
+    state.cache.forEach(({ url }) => { try { URL.revokeObjectURL(url); } catch {} });
+    state.cache.clear();
+    state.cacheOrder.length = 0;
+  }
 
-  // 3. 핵심 로직 (상태 변경)
+  async function ensureUrlFor(index) {
+    if (index < 0 || index >= state.pages.length) return null;
+    if (state.cache.has(index)) {
+      touchCacheIndex(index);
+      return state.cache.get(index).url;
+    }
+    const blob = await state.pages[index].getBlob();
+    const url = URL.createObjectURL(blob);
+    addCache(index, url);
+    return url;
+  }
+
+  function prefetch(index) {
+    if (index < 0 || index >= state.pages.length) return;
+    ensureUrlFor(index).catch(() => {});
+  }
+
+  // ====== 4) 네비게이션 / 뷰 상태 ======
   const navigate = {
     next: () => {
-      if (state.imageEntries.length > 0) {
-        state.currentIndex = (state.currentIndex + 1) % state.imageEntries.length;
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }
+      if (!state.pages.length) return;
+      state.currentIndex = (state.currentIndex + 1) % state.pages.length;
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     },
     previous: () => {
-      if (state.imageEntries.length > 0) {
-        state.currentIndex = (state.currentIndex - 1 + state.imageEntries.length) % state.imageEntries.length;
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }
+      if (!state.pages.length) return;
+      state.currentIndex = (state.currentIndex - 1 + state.pages.length) % state.pages.length;
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     },
   };
 
@@ -71,54 +121,11 @@ document.addEventListener('DOMContentLoaded', () => {
     },
   };
 
-  /**
-   * [변경] 메모리 관리를 위해 사용한 Blob URL들을 해제합니다.
-   */
-  function cleanupBlobUrls() {
-    for (const url of state.activeBlobUrls.values()) {
-      URL.revokeObjectURL(url);
-    }
-    state.activeBlobUrls.clear();
-  }
-
-  /**
-   * [변경] 새 이미지 '목록'과 OCR 데이터로 뷰어를 초기화합니다.
-   * @param {object[]} imageEntries - 표시할 이미지 zipEntry 배열
-   * @param {object|null} ocrData - Mokuro OCR 데이터
-   * @param {JSZip|null} zipObject - 로드된 JSZip 객체
-   */
-  function initializeViewer(imageEntries, ocrData = null, zipObject = null) {
-    if (imageEntries.length === 0) {
-      alert('표시할 이미지 파일이 없습니다.');
-      return;
-    }
-
-    cleanupBlobUrls(); // 이전 데이터 정리
-
-    state.imageEntries = imageEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    state.ocrData = ocrData;
-    state.zip = zipObject;
-    state.currentIndex = 0;
-    state.zoomFactor = 1.0;
-
-    const allButtons = [
-        domElements.toggleModeButton, domElements.previousButton, domElements.nextButton,
-        domElements.fitWidthButton, domElements.fitScreenButton, domElements.originalSizeButton,
-        domElements.zoomInButton, domElements.zoomOutButton
-    ];
-    allButtons.forEach(btn => btn.disabled = false);
-
-    render();
-  }
-
-  // 4. 렌더링 로직 (DOM 업데이트)
-
-  /**
-   * 이미지 요소에 스타일을 적용합니다. (변경 없음)
-   */
+  // ====== 5) 스타일 적용 / 텍스트 박스 ======
   function applyImageStyles(img) {
     img.style.display = 'block';
     img.style.margin = '0 auto';
+
     switch (state.displayMode) {
       case 'fit-width':
         img.style.width = `${state.zoomFactor * 100}%`;
@@ -129,275 +136,305 @@ document.addEventListener('DOMContentLoaded', () => {
         img.style.height = `${state.zoomFactor * 100}vh`;
         break;
       case 'original':
-      default:
-        img.style.width = `${img.naturalWidth * state.zoomFactor}px`;
+      default: {
+        const originalWidth = (img.naturalWidth || img.width) * state.zoomFactor;
+        img.style.width = `${originalWidth}px`;
         img.style.height = 'auto';
-        break;
+      }
     }
   }
 
-  /**
-   * OCR 데이터를 기반으로 텍스트 상자를 렌더링합니다. (변경 없음)
-   */
   function renderTextBoxes() {
-    domElements.overlayContainer.innerHTML = '';
-    if (!state.isTextOverlayVisible || state.isWebtoonMode || !state.ocrData || !state.ocrData.pages) {
-      return;
-    }
+    dom.overlayContainer.innerHTML = '';
+    if (!state.isTextOverlayVisible || state.isWebtoonMode || !state.ocrData || !state.ocrData.pages) return;
+
     const pageData = state.ocrData.pages[state.currentIndex];
     if (!pageData) return;
-    const imageElement = domElements.singleImageElement;
-    const containerRect = domElements.viewerContainer.getBoundingClientRect();
+
+    const imageElement = dom.singleImageElement;
+    const containerRect = dom.viewerContainer.getBoundingClientRect();
     const imageRect = imageElement.getBoundingClientRect();
+
     const imageOffsetX = imageRect.left - containerRect.left;
     const imageOffsetY = imageRect.top - containerRect.top;
     const imageScale = imageElement.clientWidth / imageElement.naturalWidth;
     if (!isFinite(imageScale)) return;
+
     pageData.blocks.forEach(block => {
       const [x1, y1, x2, y2] = block.box;
+      const boxNaturalWidth = x2 - x1;
+      const boxNaturalHeight = y2 - y1;
+
+      const scaledFontSize = Math.max(1, Math.round(block.font_size * imageScale));
+
       const textBoxContainer = document.createElement('div');
       textBoxContainer.className = 'textbox';
       textBoxContainer.style.left = `${imageOffsetX + x1 * imageScale}px`;
       textBoxContainer.style.top = `${imageOffsetY + y1 * imageScale}px`;
-      textBoxContainer.style.width = `${(x2 - x1) * imageScale}px`;
-      textBoxContainer.style.height = `${(y2 - y1) * imageScale}px`;
+      textBoxContainer.style.width = `${boxNaturalWidth * imageScale}px`;
+      textBoxContainer.style.height = `${boxNaturalHeight * imageScale}px`;
+
       const textElement = document.createElement('div');
       textElement.className = 'textInBox';
-      textElement.style.fontSize = `${Math.max(1, Math.round(block.font_size * imageScale))}px`;
+      textElement.style.fontSize = `${scaledFontSize}px`;
       textElement.innerHTML = block.lines.join('<br>');
-      if (block.vertical) {
-        textElement.style.writingMode = 'vertical-rl';
-      }
+      if (block.vertical) textElement.style.writingMode = 'vertical-rl';
+
       textBoxContainer.appendChild(textElement);
-      domElements.overlayContainer.appendChild(textBoxContainer);
+      dom.overlayContainer.appendChild(textBoxContainer);
     });
   }
-  
-  /**
-   * [신규] 단일 페이지 모드를 렌더링합니다. 현재 페이지만 압축 해제합니다.
-   */
-  async function renderSinglePage() {
-    domElements.viewerContainer.innerHTML = ''; // 이전 이미지들 제거
-    domElements.viewerContainer.appendChild(domElements.singleImageElement);
-    
-    if (state.imageEntries.length === 0) {
-      domElements.singleImageElement.src = "";
-      return;
+
+  // ====== 6) 렌더링 ======
+  async function renderSingle() {
+    // single 이미지만 표시, 웹툰 슬롯 제거
+    destroyWebtoonIfAny();
+    dom.singleImageElement.style.display = 'block';
+    dom.overlayContainer.style.display = state.isTextOverlayVisible ? 'block' : 'none';
+
+    const url = await ensureUrlFor(state.currentIndex);
+    if (!url) return;
+
+    // 이전 src와 동일하면 다시 그릴 필요 없음
+    if (dom.singleImageElement.src !== url) {
+      dom.singleImageElement.src = url;
     }
 
-    const currentEntry = state.imageEntries[state.currentIndex];
-    if (!currentEntry) return;
+    dom.singleImageElement.onload = () => {
+      applyImageStyles(dom.singleImageElement);
+      renderTextBoxes();
+    };
 
-    try {
-      const blob = await currentEntry.async('blob');
-      const url = URL.createObjectURL(blob);
+    // 가벼운 프리페치
+    prefetch(state.currentIndex + 1);
+    prefetch(state.currentIndex - 1);
+  }
 
-      // 이전 Blob URL을 메모리에서 해제하고 새 URL을 추적합니다.
-      cleanupBlobUrls();
-      state.activeBlobUrls.set(state.currentIndex, url);
-
-      domElements.singleImageElement.onload = () => {
-        applyImageStyles(domElements.singleImageElement);
-        renderTextBoxes();
-      };
-      domElements.singleImageElement.src = url;
-    } catch (error) {
-      console.error(`Error decompressing image ${currentEntry.name}:`, error);
-      domElements.singleImageElement.src = "";
+  function destroyWebtoonIfAny() {
+    const list = document.getElementById('webtoon-list');
+    if (list) list.remove();
+    if (state.io) {
+      state.io.disconnect();
+      state.io = null;
     }
   }
 
-  /**
-   * [신규] 웹툰 모드에서 다음 이미지 묶음을 로드합니다.
-   */
-  async function loadNextWebtoonBatch(batchSize = 3) {
-    const startIndex = state.webtoonState.loadedUntilIndex + 1;
-    if (startIndex >= state.imageEntries.length) {
-      if (webtoonObserver) webtoonObserver.disconnect();
-      return;
+  async function renderWebtoon() {
+    // single 이미지/오버레이 숨김
+    dom.singleImageElement.style.display = 'none';
+    dom.overlayContainer.style.display = 'none';
+
+    // 기존 웹툰 리스트 제거
+    destroyWebtoonIfAny();
+
+    // 가상 리스트 컨테이너 생성(빈 슬롯만 먼저)
+    const list = document.createElement('div');
+    list.id = 'webtoon-list';
+    dom.viewerContainer.appendChild(list);
+
+    for (let i = 0; i < state.pages.length; i++) {
+      const slot = document.createElement('div');
+      slot.className = 'page-slot';
+      slot.dataset.index = String(i);
+      // 초기 높이 임시(화면 70%): 실제 로드 후 자동으로 맞춰짐
+      slot.style.minHeight = '70vh';
+      list.appendChild(slot);
     }
 
-    const endIndex = Math.min(startIndex + batchSize, state.imageEntries.length);
-    const entriesToLoad = state.imageEntries.slice(startIndex, endIndex);
-
-    const imageElements = await Promise.all(entriesToLoad.map(async (entry, i) => {
-        const blob = await entry.async('blob');
-        const url = URL.createObjectURL(blob);
-        state.activeBlobUrls.set(startIndex + i, url);
-
-        const img = document.createElement('img');
-        img.src = url;
-        img.className = 'webtoon-img';
-        img.onload = () => applyImageStyles(img);
-        return img;
-    }));
-    
-    imageElements.forEach(img => domElements.viewerContainer.appendChild(img));
-    state.webtoonState.loadedUntilIndex = endIndex - 1;
-
-    const lastImage = imageElements[imageElements.length - 1];
-    if (lastImage && state.webtoonState.loadedUntilIndex < state.imageEntries.length - 1) {
-        webtoonObserver.observe(lastImage);
-    } else {
-        if (webtoonObserver) webtoonObserver.disconnect();
-    }
-  }
-
-  /**
-   * [신규] 웹툰 모드를 렌더링합니다. IntersectionObserver로 가상 스크롤을 구현합니다.
-   */
-  function renderWebtoonMode() {
-    domElements.viewerContainer.innerHTML = '';
-    state.webtoonState = { loadedUntilIndex: -1 };
-
-    if (webtoonObserver) webtoonObserver.disconnect();
-    
-    webtoonObserver = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
+    // 보이는 슬롯만 로드/언로드
+    state.io = new IntersectionObserver(async entries => {
+      for (const entry of entries) {
+        const idx = parseInt(entry.target.dataset.index, 10);
         if (entry.isIntersecting) {
-          webtoonObserver.unobserve(entry.target);
-          loadNextWebtoonBatch();
-        }
-      });
-    }, { rootMargin: '300%' }); // 이미지가 화면에 보이기 300% 전에 미리 로드
+          // mount
+          if (entry.target.dataset.mounted === '1') continue;
+          entry.target.dataset.mounted = '1';
 
-    loadNextWebtoonBatch(); // 첫 묶음 로드
+          const img = document.createElement('img');
+          img.className = 'webtoon-img';
+          img.setAttribute('loading', 'lazy');
+          try {
+            const url = await ensureUrlFor(idx);
+            if (!url) continue;
+            img.src = url;
+            img.onload = () => {
+              applyImageStyles(img);
+              entry.target.style.minHeight = 'auto';
+            };
+            entry.target.appendChild(img);
+            // 미리 앞장 프리페치
+            prefetch(idx + 1);
+          } catch {
+            entry.target.dataset.mounted = '0';
+          }
+        } else {
+          // unmount (보이지 않을 때는 과감히 떼서 메모리 절약)
+          if (entry.target.dataset.mounted === '1') {
+            entry.target.dataset.mounted = '0';
+            entry.target.innerHTML = '';
+            // 캐시는 LRU 정책으로 자연 정리됨
+          }
+        }
+      }
+    }, { root: null, rootMargin: '800px 0px' });
+
+    // 관찰 시작
+    list.querySelectorAll('.page-slot').forEach(el => state.io.observe(el));
   }
 
-  /**
-   * [변경] 메인 렌더링 함수: 현재 상태에 따라 뷰어 전체를 다시 그립니다.
-   */
-  function render() {
-    cleanupBlobUrls(); // 렌더링 시작 전 메모리 정리
-    domElements.overlayContainer.innerHTML = '';
+  async function render() {
+    if (!state.pages.length) return;
+    if (state.isWebtoonMode) await renderWebtoon();
+    else await renderSingle();
 
-    if (state.isWebtoonMode) {
-      renderWebtoonMode();
-    } else {
-      renderSinglePage();
-    }
     updateControlStates();
   }
 
-  /**
-   * 컨트롤 버튼들의 상태를 업데이트합니다. (큰 변경 없음)
-   */
   function updateControlStates() {
-    domElements.toggleModeButton.textContent = state.isWebtoonMode ? '단일모드 전환' : '웹툰모드 켜기';
-    domElements.previousButton.style.display = state.isWebtoonMode ? 'none' : '';
-    domElements.nextButton.style.display = state.isWebtoonMode ? 'none' : '';
-    domElements.toggleControlsButton.textContent = state.areControlsVisible ? '컨트롤 숨기기' : '컨트롤 보이기';
-    domElements.controlsContainer.classList.toggle('hidden', !state.areControlsVisible);
-    domElements.toggleTextButton.textContent = state.isTextOverlayVisible ? '텍스트 숨기기' : '텍스트 보이기';
+    dom.toggleModeButton.textContent = state.isWebtoonMode ? '단일모드 전환' : '웹툰모드 켜기';
+    dom.previousButton.style.display = state.isWebtoonMode ? 'none' : '';
+    dom.nextButton.style.display = state.isWebtoonMode ? 'none' : '';
+
+    dom.toggleControlsButton.textContent = state.areControlsVisible ? '컨트롤 숨기기' : '컨트롤 보이기';
+    dom.controlsContainer.classList.toggle('hidden', !state.areControlsVisible);
+
+    dom.toggleTextButton.textContent = state.isTextOverlayVisible ? '텍스트 숨기기' : '텍스트 보이기';
   }
 
-  // 5. 이벤트 리스너 초기화
+  // ====== 7) 초기화 ======
+  function initializeViewer(pages, ocrData = null) {
+    if (!pages.length) {
+      alert('표시할 이미지 파일이 없습니다.');
+      return;
+    }
+
+    // 기존 리소스 정리
+    destroyWebtoonIfAny();
+    clearAllCache();
+    dom.singleImageElement.src = ''; // 잠재적 디코드 해제 유도
+
+    state.pages = pages;
+    state.ocrData = ocrData;
+    state.currentIndex = 0;
+    state.zoomFactor = 1.0;
+
+    const allButtons = [
+      dom.toggleModeButton, dom.previousButton, dom.nextButton,
+      dom.fitWidthButton, dom.fitScreenButton, dom.originalSizeButton,
+      dom.zoomInButton, dom.zoomOutButton
+    ];
+    allButtons.forEach(btn => btn.disabled = false);
+
+    render();
+  }
+
+  // ====== 8) 이벤트 바인딩 ======
   function initializeEventListeners() {
-    // 폴더 선택 (기존 로직 유지, 폴더는 zip과 달리 lazy-load가 덜 중요)
-    domElements.selectFolderButton.addEventListener('click', () => domElements.folderInputElement.click());
-    domElements.folderInputElement.addEventListener('change', (e) => {
-      const imageFiles = Array.from(e.target.files).filter(f => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name));
-      // File API는 zipEntry와 달라 일단 File 객체로 직접 초기화
-      // 이 부분도 최적화가 필요하다면 별도 처리가 필요함
-      initializeViewer(imageFiles.map(f => ({
-          name: f.name,
-          async: () => Promise.resolve(f) // File 객체를 blob처럼 다루기 위한 래퍼
-      })));
+    // 폴더(파일 핸들만, 메모리 부담 적음)
+    dom.selectFolderButton.addEventListener('click', () => dom.folderInputElement.click());
+    dom.folderInputElement.addEventListener('change', (e) => {
+      const files = Array.from(e.target.files).filter(f => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name));
+      const pages = files
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+        .map(file => ({
+          name: file.name,
+          getBlob: () => Promise.resolve(file),
+        }));
+      initializeViewer(pages);
     });
-    
-    domElements.selectMokuroButton.addEventListener('click', () => domElements.mokuroInputElement.click());
-    domElements.mokuroInputElement.addEventListener('change', (e) => {
+
+    // Mokuro JSON
+    dom.selectMokuroButton.addEventListener('click', () => dom.mokuroInputElement.click());
+    dom.mokuroInputElement.addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = () => {
         try {
           state.ocrData = JSON.parse(reader.result);
-          render();
-        } catch (error) {
+          render(); // overlay 반영
+        } catch (err) {
           alert('올바르지 않은 Mokuro 파일입니다.');
+          console.error('Invalid JSON in Mokuro file:', err);
         }
       };
       reader.readAsText(file);
     });
 
-    /**
-     * [변경] ZIP 파일 이벤트 리스너: 모든 파일을 한번에 압축해제하지 않습니다.
-     */
-    domElements.selectZipButton.addEventListener('click', () => domElements.zipInputElement.click());
-    domElements.zipInputElement.addEventListener('change', async (e) => {
+    // ZIP (지연 추출)
+    dom.selectZipButton.addEventListener('click', () => dom.zipInputElement.click());
+    dom.zipInputElement.addEventListener('change', async (e) => {
       const zipFile = e.target.files[0];
       if (!zipFile) return;
 
-      try {
-        const zip = await JSZip.loadAsync(zipFile);
-        const imageEntries = [];
-        let ocrData = null;
-        const ocrPromise = [];
+      const zip = await JSZip.loadAsync(zipFile);
+      let ocrData = null;
+      const imageEntries = [];
 
-        zip.forEach((relativePath, zipEntry) => {
-          if (/\.(jpe?g|png|gif|bmp|webp)$/i.test(zipEntry.name) && !zipEntry.dir) {
-            imageEntries.push(zipEntry); // 이미지 데이터가 아닌 '파일 정보(entry)'만 저장
-          } else if (/\.mokuro$/i.test(zipEntry.name)) {
-            ocrPromise.push(zipEntry.async('string').then(text => {
-              ocrData = JSON.parse(text);
-            }));
-          }
-        });
-        
-        await Promise.all(ocrPromise); // ocr 파일 파싱이 끝날 때까지 기다림
-        initializeViewer(imageEntries, ocrData, zip); // zip 객체와 파일 '목록'으로 뷰어 초기화
-      } catch (error) {
-        alert('ZIP 파일을 처리하는 중 오류가 발생했습니다.');
-        console.error("ZIP file processing error:", error);
-      }
+      zip.forEach((relativePath, entry) => {
+        if (/\.(jpe?g|png|gif|bmp|webp)$/i.test(entry.name)) {
+          imageEntries.push(entry);
+        } else if (/\.mokuro$/i.test(entry.name)) {
+          // OCR 파일은 한 번만 로드
+          entry.async('string').then(text => { try { ocrData = JSON.parse(text); } catch {} });
+        }
+      });
+
+      imageEntries.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+      const pages = imageEntries.map((entry) => ({
+        name: entry.name,
+        getBlob: () => entry.async('blob'),
+      }));
+
+      initializeViewer(pages, ocrData);
     });
 
     // 네비게이션
-    domElements.previousButton.addEventListener('click', () => { navigate.previous(); render(); });
-    domElements.nextButton.addEventListener('click', () => { navigate.next(); render(); });
-    domElements.leftClickZone.addEventListener('click', () => { if (!state.isWebtoonMode) { navigate.previous(); render(); } });
-    domElements.rightClickZone.addEventListener('click', () => { if (!state.isWebtoonMode) { navigate.next(); render(); } });
-    
+    dom.previousButton.addEventListener('click', async () => { navigate.previous(); await render(); });
+    dom.nextButton.addEventListener('click', async () => { navigate.next(); await render(); });
+    dom.leftClickZone.addEventListener('click', async () => { navigate.previous(); await render(); });
+    dom.rightClickZone.addEventListener('click', async () => { navigate.next(); await render(); });
+
     // 뷰 모드
-    domElements.toggleModeButton.addEventListener('click', () => { view.toggleWebtoonMode(); render(); });
-    domElements.fitWidthButton.addEventListener('click', () => { view.changeMode('fit-width'); render(); });
-    domElements.fitScreenButton.addEventListener('click', () => { view.changeMode('fit-screen'); render(); });
-    domElements.originalSizeButton.addEventListener('click', () => { view.changeMode('original'); render(); });
+    dom.toggleModeButton.addEventListener('click', async () => { view.toggleWebtoonMode(); await render(); });
+    dom.fitWidthButton.addEventListener('click', async () => { view.changeMode('fit-width'); await render(); });
+    dom.fitScreenButton.addEventListener('click', async () => { view.changeMode('fit-screen'); await render(); });
+    dom.originalSizeButton.addEventListener('click', async () => { view.changeMode('original'); await render(); });
 
     // 줌
-    domElements.zoomInButton.addEventListener('click', () => { view.zoom('in'); render(); });
-    domElements.zoomOutButton.addEventListener('click', () => { view.zoom('out'); render(); });
-    
-    domElements.viewerContainer.addEventListener('wheel', e => {
+    dom.zoomInButton.addEventListener('click', async () => { view.zoom('in'); await render(); });
+    dom.zoomOutButton.addEventListener('click', async () => { view.zoom('out'); await render(); });
+
+    dom.viewerContainer.addEventListener('wheel', async e => {
       if (!e.shiftKey) return;
       e.preventDefault();
       view.zoom(e.deltaY < 0 ? 'in' : 'out');
-      render();
-    }, { passive: false });
+      await render();
+    });
 
-    window.addEventListener('keydown', e => {
-      if(state.imageEntries.length === 0) return;
-      if (e.key === 'ArrowRight') { if (!state.isWebtoonMode) { navigate.next(); render(); } }
-      else if (e.key === 'ArrowLeft') { if (!state.isWebtoonMode) { navigate.previous(); render(); } }
-      else if (e.key === '+' || e.key === '=') { view.zoom('in'); render(); } 
-      else if (e.key === '-') { view.zoom('out'); render(); }
+    window.addEventListener('keydown', async e => {
+      if (e.key === '+' || e.key === '=') { view.zoom('in'); await render(); }
+      else if (e.key === '-') { view.zoom('out'); await render(); }
     });
 
     // UI 토글
-    domElements.toggleControlsButton.addEventListener('click', () => {
+    dom.toggleControlsButton.addEventListener('click', () => {
       state.areControlsVisible = !state.areControlsVisible;
       updateControlStates();
     });
-    domElements.toggleTextButton.addEventListener('click', () => {
+
+    dom.toggleTextButton.addEventListener('click', async () => {
       state.isTextOverlayVisible = !state.isTextOverlayVisible;
-      render();
+      await render();
     });
-    
-    // 창 크기가 변경될 때 텍스트 박스 위치 재조정
-    window.addEventListener('resize', renderTextBoxes);
+
+    // 탭 닫힘/새로고침 시 리소스 해제
+    window.addEventListener('beforeunload', () => {
+      destroyWebtoonIfAny();
+      clearAllCache();
+    });
   }
 
-  // 6. 애플리케이션 시작
+  // ====== 9) 시작 ======
   initializeEventListeners();
 });
