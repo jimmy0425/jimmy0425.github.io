@@ -1,36 +1,48 @@
 // 요소 가져오기
-const pickBtn         = document.getElementById('pick-folder');
-const fileInput       = document.getElementById('folder-input');
-const loadJsonBtn     = document.getElementById('load-json');
-const jsonInput       = document.getElementById('json-input');
-const toggleBtn       = document.getElementById('toggle-mode');
-const btnPrev         = document.getElementById('prev');
-const btnNext         = document.getElementById('next');
-const btnFitWidth     = document.getElementById('fit-width');
-const btnFitScreen    = document.getElementById('fit-screen');
-const btnOriginal     = document.getElementById('original');
-const btnZoomOut      = document.getElementById('zoom-out');
-const btnZoomIn       = document.getElementById('zoom-in');
+const pickBtn = document.getElementById('pick-folder');
+const fileInput = document.getElementById('folder-input');
+const loadJsonBtn = document.getElementById('load-json');
+const jsonInput = document.getElementById('json-input');
+const toggleBtn = document.getElementById('toggle-mode');
+const btnPrev = document.getElementById('prev');
+const btnNext = document.getElementById('next');
+const btnFitWidth = document.getElementById('fit-width');
+const btnFitScreen = document.getElementById('fit-screen');
+const btnOriginal = document.getElementById('original');
+const btnZoomOut = document.getElementById('zoom-out');
+const btnZoomIn = document.getElementById('zoom-in');
 const viewerContainer = document.getElementById('viewer-container');
-const overlayContainer= document.getElementById('overlay-container');
-const singleImg       = document.getElementById('viewer');
-const clickLeft       = document.getElementById('click-left');
-const clickRight      = document.getElementById('click-right');
+const overlayContainer = document.getElementById('overlay-container');
+const singleImg = document.getElementById('viewer');
+const clickLeft = document.getElementById('click-left');
+const clickRight = document.getElementById('click-right');
 
-const zipInput        = document.getElementById('zip-input');
-const pickZipBtn      = document.getElementById('pick-zip');
+const zipInput = document.getElementById('zip-input');
+const pickZipBtn = document.getElementById('pick-zip');
+
+// ✅ 추가: 투명도 버튼 참조
+const btnOpacity = document.getElementById('opacity-btn');
 
 singleImg.addEventListener('load', () => {
   // 이미지가 화면에 완전히 렌더링된 뒤 텍스트박스 그리기
   renderTextBoxes(isTextHidden);
 });
 
+// ✅ 추가: 텍스트 박스 투명도 상태
+let textOpacity = 1.0; // 1.0=100%, 0.0=0%
+
+// ✅ 추가: 오버레이 투명도 적용 함수
+function applyTextOpacity() {
+  overlayContainer.style.opacity = String(textOpacity);
+}
+
+
 // 상태 변수
 let files = [];       //이미지 파일들
-let currentIndex = 0; 
+let currentIndex = 0;
 let isWebtoonMode = false;
-let displayMode = 'fit-width';
-//let displayMode = 'original';
+//let displayMode = 'fit-screen';
+let displayMode = 'default';
 let zoomFactor = 1;
 let mokuroData = null;
 
@@ -44,6 +56,9 @@ function applyStyles(img) {
   } else if (displayMode === 'fit-screen') {
     img.style.width = 'auto';
     img.style.height = `${zoomFactor * 100}vh`;
+  } else if(displayMode === 'default'){
+    img.style.width = `${zoomFactor * 80}%`;
+    img.style.height = 'auto';
   } else {
     const w = img.naturalWidth * zoomFactor;
     img.style.width = `${w}px`;
@@ -61,6 +76,8 @@ function updateAllStyles() {
   if (!isWebtoonMode) {
     renderTextBoxes(isTextHidden);
   }
+  // ✅ 추가: 스타일 갱신 후에도 투명도 재적용
+  applyTextOpacity();
 }
 
 // 렌더링
@@ -109,7 +126,7 @@ fileInput.addEventListener('change', () => {
   const allFiles = Array.from(fileInput.files);
   files = allFiles
     .filter(f => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true}));
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!files.length) {
     alert('이미지 파일이 없습니다.');
     [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn]
@@ -140,8 +157,8 @@ btnZoomOut.addEventListener('click', () => { zoomFactor *= 0.9; updateAllStyles(
 loadJsonBtn.addEventListener('click', () => jsonInput.click());
 
 // 클릭 영역 핸들링
-clickLeft.addEventListener('click', e => { e.stopPropagation(); nextImage(); updateAllStyles();});
-clickRight.addEventListener('click', e => { e.stopPropagation(); prevImage(); updateAllStyles();});
+clickLeft.addEventListener('click', e => { e.stopPropagation(); nextImage(); updateAllStyles(); });
+clickRight.addEventListener('click', e => { e.stopPropagation(); prevImage(); updateAllStyles(); });
 
 // Shift + 마우스 휠로 줌
 viewerContainer.addEventListener('wheel', e => {
@@ -195,28 +212,28 @@ function renderTextBoxes(isTextHidden) {
   overlayContainer.innerHTML = '';
 
   if (isTextHidden) return;
-  
+
   // JSON 미로드 시 스킵 (일단 이미지만 렌더링 했을때) 이거 나중에는 무조건 이미지,json 둘다 한번에 로드하게끔 변경해야함.
   if (!mokuroData || !mokuroData.pages) return;
 
   const page = mokuroData.pages[currentIndex];  //현재 페이지의 내용들을 page객체에 저장
-  if (!page) return;   
-  
+  if (!page) return;
+
   // 2) Compute image scale and its offset *inside* the viewer-container
   //    - scale: current displayed px per natural px (aspect ratio preserved => X == Y)
   //    - offsetX/offsetY: letterboxing gap because the img is centered in the container
   const contRect = viewerContainer.getBoundingClientRect();
-  const imgRect  = singleImg.getBoundingClientRect();
-  const offsetX  = imgRect.left - contRect.left;
-  const offsetY  = imgRect.top  - contRect.top;
-  const scale    = singleImg.clientWidth / singleImg.naturalWidth;
+  const imgRect = singleImg.getBoundingClientRect();
+  const offsetX = imgRect.left - contRect.left;
+  const offsetY = imgRect.top - contRect.top;
+  const scale = singleImg.clientWidth / singleImg.naturalWidth;
 
   page.blocks.forEach(block => {
     const [x1, y1, x2, y2] = block.box;
     const w0 = x2 - x1;
     const h0 = y2 - y1;
 
-    const expand   = 0; // <-- adjust if you want to grow boxes
+    const expand = 0; // <-- adjust if you want to grow boxes
     const halfExpW = Math.round(w0 * expand / 2);
     const halfExpH = Math.round(h0 * expand / 2);
 
@@ -224,21 +241,21 @@ function renderTextBoxes(isTextHidden) {
     const ymin = clamp(y1 - halfExpH, 0, singleImg.naturalHeight);
     const xmax = clamp(x2 + halfExpW, 0, singleImg.naturalWidth);
     const ymax = clamp(y2 + halfExpH, 0, singleImg.naturalHeight);
-    const w    = xmax - xmin;
-    const h    = ymax - ymin;
+    const w = xmax - xmin;
+    const h = ymax - ymin;
 
     // 3) Place relative to overlay (which is relative to viewer-container)
-    const left   = offsetX + xmin * scale;
-    const top    = offsetY + ymin * scale;
-    const width  = w * scale;
+    const left = offsetX + xmin * scale;
+    const top = offsetY + ymin * scale;
+    const width = w * scale;
     const height = h * scale;
     const fontSz = Math.max(1, Math.round(block.font_size * scale));
 
     const box = document.createElement('div');
     box.className = 'textbox';
-    box.style.left   = `${left}px`;
-    box.style.top    = `${top}px`;
-    box.style.width  = `${width}px`;
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
     box.style.height = `${height}px`;
 
     const textInBox = document.createElement('div');
@@ -250,6 +267,8 @@ function renderTextBoxes(isTextHidden) {
     box.appendChild(textInBox);
     overlayContainer.appendChild(box);
   });
+  // ✅ 추가: 박스들을 그린 직후 현재 투명도 반영
+  applyTextOpacity();
 }
 
 
@@ -259,10 +278,10 @@ function renderTextBoxes(isTextHidden) {
 // img_width : 
 // img_height :
 // blocks[0], [1], ...[9] : 9개의 말풍선이 있다
-    // box [0],,[4] : 말풍선의 4개의 꼭지점 좌표?
-    // font_size : 이미지의 크기에 맞는 OCR이 제공한 폰트크기
-    // lines : [0], ,,[4] : 이게 text
-    // lines_coords: [0], [1], [2], [3] : 말풍선안에 4개의 줄이 있고 각각의 줄에 text가 있는 형태
+// box [0],,[4] : 말풍선의 4개의 꼭지점 좌표?
+// font_size : 이미지의 크기에 맞는 OCR이 제공한 폰트크기
+// lines : [0], ,,[4] : 이게 text
+// lines_coords: [0], [1], [2], [3] : 말풍선안에 4개의 줄이 있고 각각의 줄에 text가 있는 형태
 
 
 // ZIP 선택
@@ -323,8 +342,21 @@ let isTextHidden = false;
 hideTextButton.addEventListener('click', () => {
   isTextHidden = !isTextHidden;
   updateAllStyles();
-  hideTextButton.textContent = isTextHidden ? '텍스트' : '텍스트';
+  hideTextButton.textContent = isTextHidden ? '텍스트 없음' : '텍스트 있음';
   console.log(isTextHidden);
 });
 
 
+// ✅ 추가: 투명도 버튼 동작 (순환)
+btnOpacity.addEventListener('click', () => {
+  // 1. 다음 단계로 순환
+  const steps = [1.0, 0.0];
+  const idx = steps.indexOf(textOpacity);
+  textOpacity = steps[(idx + 1) % steps.length];
+
+  // 2. 즉시 반영
+  applyTextOpacity();
+
+  // 3. 라벨 갱신
+  btnOpacity.textContent = `투명도: ${100 - textOpacity*100}%`;
+});
