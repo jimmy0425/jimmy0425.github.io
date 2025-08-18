@@ -249,6 +249,7 @@ function renderTextBoxes(isTextHidden) {
     const top = offsetY + ymin * scale;
     const width = w * scale;
     const height = h * scale;
+    if(block.font_size >= 32) block.font_size = 32;
     const fontSz = Math.max(1, Math.round(block.font_size * scale));
 
     const box = document.createElement('div');
@@ -364,3 +365,4 @@ btnOpacity.addEventListener('click', () => {
     btnOpacity.textContent = `보임`;
   }
 });
+
