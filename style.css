@@ -116,7 +116,7 @@ body {
   padding: 10px 16px;  
   font-size: 16px;
   min-width: 20px;
-  min-height: 80px;
+  height: 80px;
 }
 
 #toggle-text-btn {
@@ -131,7 +131,7 @@ body {
   padding: 10px 16px;
   font-size: 16px;
   min-width: 20px;
-  min-height: 80px;
+  height: 80px;
 }
 
 #opacity-btn{
@@ -146,6 +146,7 @@ body {
   padding: 10px 16px;
   font-size: 16px;
   min-width: 20px;
-  min-height: 80px;
+  height: 80px;
 }
+
 
