@@ -106,7 +106,9 @@ body {
 
 #toggle-controls-btn {
   writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
   text-orientation: upright; /* 글자를 세로로 똑바로 */
+  -webkit-text-orientation: upright; /* iOS 대응 */
   position: fixed;
   top: 10px;
   right: 10px;
@@ -119,7 +121,9 @@ body {
 
 #toggle-text-btn {
   writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
   text-orientation: upright; /* 글자를 세로로 똑바로 */
+  -webkit-text-orientation: upright; /* iOS 대응 */
   position: fixed;
   top: 100px;
   right: 10px;
@@ -132,7 +136,9 @@ body {
 
 #opacity-btn{
   writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
   text-orientation: upright; /* 글자를 세로로 똑바로 */
+  -webkit-text-orientation: upright; /* iOS 대응 */
   position: fixed;
   top: 200px;
   right: 10px;
@@ -142,3 +148,4 @@ body {
   min-width: 20px;
   min-height: 80px;
 }
+
