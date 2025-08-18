@@ -105,34 +105,40 @@ body {
 }
 
 #toggle-controls-btn {
+  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  text-orientation: upright; /* 글자를 세로로 똑바로 */
   position: fixed;
   top: 10px;
   right: 10px;
   z-index: 10000;
   padding: 10px 16px;  
   font-size: 16px;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 20px;
+  min-height: 80px;
 }
 
 #toggle-text-btn {
+  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  text-orientation: upright; /* 글자를 세로로 똑바로 */
   position: fixed;
-  top: 80px;
+  top: 100px;
   right: 10px;
   z-index: 10000;
   padding: 10px 16px;
   font-size: 16px;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 20px;
+  min-height: 80px;
 }
 
 #opacity-btn{
+  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
+  text-orientation: upright; /* 글자를 세로로 똑바로 */
   position: fixed;
-  top: 150px;
+  top: 200px;
   right: 10px;
   z-index: 10000;
   padding: 10px 16px;
   font-size: 16px;
-  min-width: 40px;
-  min-height: 40px;
+  min-width: 20px;
+  min-height: 80px;
 }
