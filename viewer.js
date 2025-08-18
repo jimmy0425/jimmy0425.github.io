@@ -334,7 +334,7 @@ let isHidden = false;
 hideButton.addEventListener('click', () => {
   isHidden = !isHidden;
   controls.classList.toggle('hidden', isHidden);
-  hideButton.textContent = isHidden ? '컨트롤' : '컨트롤';
+  hideButton.textContent = isHidden ? '컨' : '컨';
 });
 
 const hideTextButton = document.getElementById('toggle-text-btn');
@@ -342,7 +342,7 @@ let isTextHidden = false;
 hideTextButton.addEventListener('click', () => {
   isTextHidden = !isTextHidden;
   updateAllStyles();
-  hideTextButton.textContent = isTextHidden ? '텍스트 없음' : '텍스트 있음';
+  hideTextButton.textContent = isTextHidden ? '제거' : '생성';
   console.log(isTextHidden);
 });
 
@@ -357,6 +357,10 @@ btnOpacity.addEventListener('click', () => {
   // 2. 즉시 반영
   applyTextOpacity();
 
-  // 3. 라벨 갱신
-  btnOpacity.textContent = `투명도: ${100 - textOpacity*100}%`;
+  // 3. 라벨 갱신 (투명도)
+  if (textOpacity == 0){
+    btnOpacity.textContent = `안보임`;
+  }else{
+    btnOpacity.textContent = `보임`;
+  }
 });
