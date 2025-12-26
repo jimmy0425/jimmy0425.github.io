@@ -301,15 +301,29 @@ function renderTextBoxes(isTextHidden) {
     textInBox.innerHTML = block.lines.join('');
 
     // 2. CSS로 박스 크기에 맞춰 자동 줄바꿈 처리 (모양 유지)
-    textInBox.style.wordBreak = 'break-all'; // 단어 중간이라도 줄바꿈 허용
     textInBox.style.whiteSpace = 'normal'; // CSS의 nowrap 속성 덮어쓰기
     textInBox.style.lineHeight = '1.2';
-    textInBox.style.width = '100%';
-    textInBox.style.height = '100%';
 
+    // 핵심: 단어 중간에 끊기지 않도록 설정 (줄바꿈 빈도 감소)
+    textInBox.style.wordBreak = 'keep-all';
+    textInBox.style.overflowWrap = 'anywhere';
+
+    // 3. 박스 크기 여유 주기 (살짝 벗어나게)
     if (block.vertical) {
+      // [세로쓰기]
       textInBox.style.writingMode = 'vertical-rl';
       textInBox.style.textOrientation = 'upright';
+
+      // 높이를 10% 더 여유 있게 잡음
+      textInBox.style.height = '110%';
+      textInBox.style.top = '-5%'; // 위로 살짝 올려서 중앙 정렬 효과
+      textInBox.style.width = '100%';
+    } else {
+      // [가로쓰기]
+      // 너비를 15% 더 여유 있게 잡음
+      textInBox.style.width = '115%';
+      textInBox.style.marginLeft = '-7.5%'; // 왼쪽으로 살짝 당겨서 중앙 정렬 효과
+      textInBox.style.height = 'auto';
     }
 
     // ▲▲▲ [수정 끝] ▲▲▲
