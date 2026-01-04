@@ -36,9 +36,24 @@ singleImg.addEventListener('load', () => {
 // ✅ 추가: 텍스트 박스 투명도 상태
 let textOpacity = 1.0; // 1.0=100%, 0.0=0%
 
-// ✅ 추가: 오버레이 투명도 적용 함수
+// ✅ 추가: 투명도 적용 함수 수정 (배경 레이어만 투명도 조절)
 function applyTextOpacity() {
-  overlayContainer.style.opacity = String(textOpacity);
+  const bgLayer = document.getElementById('bg-layer');
+  const textLayer = document.getElementById('text-layer');
+
+  // 배경은 설정된 투명도 따라감
+  if (bgLayer) bgLayer.style.opacity = String(textOpacity);
+
+  // 텍스트는 완전히 안 보일 때(0.0)만 숨기고, 그 외엔 선명하게 유지(혹은 같이 흐리게 할지 선택)
+  // 요청하신 "글자만 있는 div"는 투명도가 0일때는 같이 안보여야 하므로:
+  if (textLayer) {
+    // 투명도가 0이면 아예 숨김, 아니면 글자는 100% (잘 보이게)
+    // 만약 글자도 흐리게 하고 싶다면 textOpacity 그대로 적용하세요.
+    textLayer.style.opacity = textOpacity === 0 ? '0' : '1';
+
+    // [선택사항] 글자 색상을 검정으로 고정하고 싶다면:
+    // textLayer.style.color = "black";
+  }
 }
 
 // 상태 변수
@@ -86,27 +101,41 @@ function updateAllStyles() {
 // 렌더링
 function render() {
   viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
+
   if (isWebtoonMode) {
+    // [웹툰 모드]
     files.forEach((file) => {
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.className = 'webtoon-img';
-      img.onload = () => applyStyles(img);
+      // 웹툰 모드에서도 로드 완료 후 스타일 적용
+      img.onload = () => {
+        applyStyles(img);
+        // 웹툰 모드는 오버레이가 없으므로 여기서 끝
+      };
       viewerContainer.appendChild(img);
     });
     overlayContainer.innerHTML = '';
   } else {
+    // [단일 이미지 모드]
+    // 1. 이미지가 로드된 "후에" 스타일과 텍스트박스를 그리도록 설정
+    singleImg.onload = () => {
+      updateAllStyles(); // 이 함수가 내부적으로 renderTextBoxes를 호출함
+    };
+
+    // 2. 소스 할당 (이 시점에 로딩 시작)
     singleImg.src = URL.createObjectURL(files[currentIndex]);
     viewerContainer.appendChild(singleImg);
   }
-  updateAllStyles();
+
+  // 버튼 상태 갱신
   btnPrev.style.display = isWebtoonMode ? 'none' : '';
   btnNext.style.display = isWebtoonMode ? 'none' : '';
 
-  // ✅ 추가: 현재 페이지 정보 업데이트 (1부터 시작하므로 +1)
+  // 페이지 정보 업데이트
   if (files.length > 0) {
     pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
-    pageInput.value = currentIndex + 1; // 입력창에도 현재 페이지 표시
+    pageInput.value = currentIndex + 1;
   } else {
     pageInfo.textContent = '0 / 0';
     pageInput.value = '';
@@ -246,74 +275,196 @@ function clamp(value, min, max) {
 }
 
 // 텍스트박스 렌더링
+// 텍스트박스 렌더링 (라인 단위 + 2 Layer 방식)
 function renderTextBoxes(isTextHidden) {
-  //무조건 기존 오버레이 초기화
+  // 1. 초기화
   overlayContainer.innerHTML = '';
-
   if (isTextHidden) return;
-
-  // JSON 미로드 시 스킵 (일단 이미지만 렌더링 했을때) 이거 나중에는 무조건 이미지,json 둘다 한번에 로드하게끔 변경해야함.
   if (!mokuroData || !mokuroData.pages) return;
+  const page = mokuroData.pages[currentIndex];
+  if (!page || !page.blocks || page.blocks.length === 0) return;
 
-  const page = mokuroData.pages[currentIndex]; //현재 페이지의 내용들을 page객체에 저장
-  if (!page || !page.blocks || page.blocks.length === 0) return; // ✅ 안전 장치 추가
+  // ✅ 추가: 이미지가 아직 로드되지 않아 너비가 0이라면 계산 중단 (에러 방지)
+  if (singleImg.naturalWidth === 0) return;
 
-  // ✅ 추가: 동적 폰트 크기 상한선 계산
-  const fontSizeCap = calculateDynamicFontSizeCap(page.blocks);
+  // 2. 레이어 생성
+  const bgLayer = document.createElement('div');
+  bgLayer.id = 'bg-layer';
+  const textLayer = document.createElement('div');
+  textLayer.id = 'text-layer';
 
-  // 2) Compute image scale and its offset *inside* the viewer-container
-  //    - scale: current displayed px per natural px (aspect ratio preserved => X == Y)
-  //    - offsetX/offsetY: letterboxing gap because the img is centered in the container
+  overlayContainer.appendChild(bgLayer);
+  overlayContainer.appendChild(textLayer);
+
+  // 3. 이미지 배율 및 오프셋 계산
   const contRect = viewerContainer.getBoundingClientRect();
   const imgRect = singleImg.getBoundingClientRect();
   const offsetX = imgRect.left - contRect.left;
   const offsetY = imgRect.top - contRect.top;
   const scale = singleImg.clientWidth / singleImg.naturalWidth;
 
+  // 4. 블록 순회
   page.blocks.forEach((block) => {
-    const [x1, y1, x2, y2] = block.box;
-    const w0 = x2 - x1;
-    const h0 = y2 - y1;
+    // 안전 장치
+    if (!block.lines || !block.lines_coords || block.lines.length !== block.lines_coords.length) {
+      return;
+    }
 
-    const expand = 0; // <-- adjust if you want to grow boxes
-    const halfExpW = Math.round((w0 * expand) / 2);
-    const halfExpH = Math.round((h0 * expand) / 2);
+    // 세로쓰기 보정된 좌표 가져오기
+    const correctedCoords = fixVerticalLineCoords(block);
 
-    const xmin = clamp(x1 - halfExpW, 0, singleImg.naturalWidth);
-    const ymin = clamp(y1 - halfExpH, 0, singleImg.naturalHeight);
-    const xmax = clamp(x2 + halfExpW, 0, singleImg.naturalWidth);
-    const ymax = clamp(y2 + halfExpH, 0, singleImg.naturalHeight);
-    const w = xmax - xmin;
-    const h = ymax - ymin;
+    // -------------------------------------------------------
+    // [STEP A] 블록 전체를 감싸는 '통합 바운딩 박스' 계산
+    // -------------------------------------------------------
+    let bMinX = Infinity,
+      bMinY = Infinity,
+      bMaxX = -Infinity,
+      bMaxY = -Infinity;
 
-    // 3) Place relative to overlay (which is relative to viewer-container)
-    const left = offsetX + xmin * scale;
-    const top = offsetY + ymin * scale;
-    const width = w * scale;
-    const height = h * scale;
+    // 블록 내의 모든 라인, 모든 점을 순회하며 가장 바깥쪽 좌표 찾기
+    correctedCoords.forEach((line) => {
+      line.forEach(([x, y]) => {
+        if (x < bMinX) bMinX = x;
+        if (x > bMaxX) bMaxX = x;
+        if (y < bMinY) bMinY = y;
+        if (y > bMaxY) bMaxY = y;
+      });
+    });
 
-    // ✅ 수정: 보정된 폰트 크기를 계산하여 사용
-    const correctedFontSize = Math.min(block.font_size, fontSizeCap);
-    const fontSz = Math.max(1, Math.round(correctedFontSize * scale));
+    // 1. 원본 박스의 너비와 높이를 먼저 계산합니다.
+    const rawWidth = bMaxX - bMinX;
+    const rawHeight = bMaxY - bMinY;
 
-    const box = document.createElement('div');
-    box.className = 'textbox';
-    box.style.left = `${left}px`;
-    box.style.top = `${top}px`;
-    box.style.width = `${width}px`;
-    box.style.height = `${height}px`;
+    // 2. 3%에 해당하는 여백을 계산합니다. (0.05 = 5%)
+    const padX = rawWidth * 0.07;
+    const padY = rawHeight * 0.05;
 
-    const textInBox = document.createElement('div');
-    textInBox.className = 'textInBox';
-    textInBox.style.fontSize = `${fontSz}px`;
-    textInBox.innerHTML = block.lines.join('<br>');
-    if (block.vertical) textInBox.style.writingMode = 'vertical-rl';
+    // 상하좌우로 padding만큼 넓힘 (이미지 밖으로 나가지 않게 clamp 적용)
+    const bx1 = clamp(bMinX - padX, 0, singleImg.naturalWidth);
+    const by1 = clamp(bMinY - padY, 0, singleImg.naturalHeight);
+    const bx2 = clamp(bMaxX + padX, 0, singleImg.naturalWidth);
+    const by2 = clamp(bMaxY + padY, 0, singleImg.naturalHeight);
 
-    box.appendChild(textInBox);
-    overlayContainer.appendChild(box);
+    const bw = bx2 - bx1;
+    const bh = by2 - by1;
+
+    // 뷰어상 실제 위치 변환
+    const bgLeft = offsetX + bx1 * scale;
+    const bgTop = offsetY + by1 * scale;
+    const bgWidth = bw * scale;
+    const bgHeight = bh * scale;
+
+    // -------------------------------------------------------
+    // [STEP B] 배경 박스 생성 (블록당 1개) -> bgLayer
+    // -------------------------------------------------------
+    const bgBox = document.createElement('div');
+    bgBox.className = 'bg-box';
+    bgBox.style.left = `${bgLeft}px`;
+    bgBox.style.top = `${bgTop}px`;
+    bgBox.style.width = `${bgWidth}px`;
+    bgBox.style.height = `${bgHeight}px`;
+    bgLayer.appendChild(bgBox);
+
+    // -------------------------------------------------------
+    // [STEP C] 텍스트 박스 생성 (라인당 1개) -> textLayer
+    // -------------------------------------------------------
+    block.lines.forEach((rawLineText, index) => {
+      // ✅ 수정: 전각(．)이든 반각(.)이든 "2개 이상" 연속되면 무조건 점 1개로 통일
+      // 정규식 설명: [．.] -> 전각 점이나 반각 점이, {2,} -> 2개 이상 연속되면
+      const lineText = rawLineText.replace(/[．.]{2,}/g, '.');
+
+      const coords = correctedCoords[index];
+      const bounds = getPolygonBounds(coords); // 개별 라인의 바운딩 박스
+
+      const lx1 = clamp(bounds.x, 0, singleImg.naturalWidth);
+      const ly1 = clamp(bounds.y, 0, singleImg.naturalHeight);
+
+      const lLeft = offsetX + lx1 * scale;
+      const lTop = offsetY + ly1 * scale;
+      const lWidth = bounds.w * scale;
+      const lHeight = bounds.h * scale;
+
+      const textBox = document.createElement('div');
+      textBox.className = 'line-box';
+      if (block.vertical) {
+        textBox.classList.add('vertical');
+      }
+
+      textBox.style.left = `${lLeft}px`;
+      textBox.style.top = `${lTop}px`;
+      textBox.style.width = `${lWidth}px`;
+      textBox.style.height = `${lHeight}px`;
+
+      // 폰트 크기
+      if (block.font_size) {
+        const scaledFontSize = block.font_size * scale;
+        const finalFontSize = scaledFontSize * 0.98;
+        textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
+      } else {
+        const targetSize = block.vertical ? bounds.w * scale : bounds.h * scale;
+        textBox.style.fontSize = `${targetSize * 0.95}px`;
+      }
+
+      textBox.textContent = lineText;
+      textLayer.appendChild(textBox);
+    });
   });
-  // ✅ 추가: 박스들을 그린 직후 현재 투명도 반영
+
+  // 5. 투명도 적용
   applyTextOpacity();
+}
+
+/**
+ * 다각형 좌표([[x,y],...])를 받아 사각형 바운딩 박스(x, y, w, h)를 반환
+ */
+function getPolygonBounds(coords) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  coords.forEach(([x, y]) => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  });
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/**
+ * 세로쓰기일 경우, 라인들의 시작점(Y)을 블록 내에서 통일감 있게 보정하는 함수
+ * (삐뚤빼뚤한 시작점을 가장 위쪽 라인 기준으로 맞춤)
+ */
+function fixVerticalLineCoords(block) {
+  // 깊은 복사로 원본 데이터 보호
+  const coords = JSON.parse(JSON.stringify(block.lines_coords));
+
+  if (!block.vertical || coords.length < 2) {
+    return coords;
+  }
+
+  // 1. 모든 라인의 minY(시작 높이)를 수집
+  const minYs = coords.map((line) => Math.min(...line.map((p) => p[1])));
+
+  // 2. 블록 전체의 '기준 Top' 찾기 (가장 위에 있는 라인의 Y값)
+  const blockTop = Math.min(...minYs);
+
+  // 3. 보정 허용 오차 (픽셀 단위, 예: 30px 이내 차이는 같은 줄로 간주)
+  const TOLERANCE = 30;
+
+  // 4. 좌표 보정
+  return coords.map((line, i) => {
+    const currentMinY = minYs[i];
+
+    // 이 라인이 기준점(blockTop)과 가깝다면 (오차 범위 내)
+    if (Math.abs(currentMinY - blockTop) < TOLERANCE) {
+      // Y좌표 이동량 계산 (위로 끌어올림)
+      const diff = currentMinY - blockTop;
+      // 라인의 모든 점의 Y좌표를 diff만큼 뺌
+      return line.map(([x, y]) => [x, y - diff]);
+    }
+    return line;
+  });
 }
 
 //json 구조 :

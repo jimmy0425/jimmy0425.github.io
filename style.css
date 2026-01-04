@@ -30,6 +30,62 @@ body {
   z-index: 15;
 }
 
+/* Layer 1: 배경 레이어 (클릭 불가) */
+#bg-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* 마우스 이벤트 무시 */
+  z-index: 1;
+}
+
+/* Layer 2: 텍스트 레이어 (드래그 가능) */
+/* Layer 2: 텍스트 레이어 (수정됨) */
+#text-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* ✅ 중요: 껍데기는 클릭을 통과시켜야 함! */
+  z-index: 2;
+}
+
+/* 개별 라인 박스 스타일 (수정됨) */
+.line-box {
+  position: absolute;
+  /* display: flex;  <-- 제거 혹은 block으로 변경 */
+  display: block;    /* 기본 블록 동작 (좌측 상단 정렬) */
+  
+  /* align-items: center;      <-- 제거 (절대 필요없음) */
+  /* justify-content: center;  <-- 제거 */
+  
+  box-sizing: border-box;
+  overflow: visible;
+  line-height: 1.0;  /* 줄 간격이 벌어지지 않게 타이트하게 설정 */
+  white-space: nowrap;
+
+  font-weight: bold;
+  
+  pointer-events: auto; 
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+.line-box.vertical {
+  writing-mode: vertical-rl;
+}
+
+/* 배경 박스 스타일 */
+.bg-box {
+  position: absolute;
+  background-color: #e2e2e2;
+  border-radius: 3px;
+}
+
 /* 텍스트박스 스타일 */
 .textbox {
   position: absolute;
