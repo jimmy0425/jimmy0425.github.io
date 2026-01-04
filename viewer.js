@@ -233,7 +233,6 @@ function clamp(value, min, max) {
 
 // 텍스트박스 렌더링
 function renderTextBoxes(isTextHidden) {
-  // 기존 오버레이 초기화
   overlayContainer.innerHTML = '';
 
   if (isTextHidden) return;
@@ -253,40 +252,34 @@ function renderTextBoxes(isTextHidden) {
   const scale = singleImg.clientWidth / singleImg.naturalWidth;
 
   page.blocks.forEach((block) => {
-    // 폰트 사이즈 계산 (블록 공통)
     const correctedFontSize = Math.min(block.font_size, fontSizeCap);
     const fontSz = Math.max(1, Math.round(correctedFontSize * scale));
 
-    // ★ 수정된 부분: block 통째로 그리는 게 아니라, line 단위로 순회 ★
+    // 무조건 줄(Line) 단위로 순회하며 그리기
     block.lines.forEach((lineText, index) => {
-      // 해당 줄의 좌표 정보가 없으면 스킵 (혹은 block.box로 대체하는 로직 추가 가능)
-      if (!block.lines_coords || !block.lines_coords[index]) return;
+      const coords = block.lines_coords[index];
+      // coords 구조: [[x,y], [x,y], [x,y], [x,y]] (점 4개)
 
-      // 각 줄(line)의 좌표를 가져옴
-      const [x1, y1, x2, y2] = block.lines_coords[index];
+      // 점 4개에서 사각형의 min/max 좌표 추출
+      // (Mokuro 데이터가 보장된다면 coords는 반드시 존재)
+      const xs = coords.map((p) => p[0]);
+      const ys = coords.map((p) => p[1]);
+
+      const x1 = Math.min(...xs);
+      const x2 = Math.max(...xs);
+      const y1 = Math.min(...ys);
+      const y2 = Math.max(...ys);
 
       const w0 = x2 - x1;
       const h0 = y2 - y1;
 
-      // 필요하다면 박스 크기 확장 (현재는 0)
-      const expand = 0;
-      const halfExpW = Math.round((w0 * expand) / 2);
-      const halfExpH = Math.round((h0 * expand) / 2);
+      // 뷰어 내 좌표로 변환
+      const left = offsetX + x1 * scale;
+      const top = offsetY + y1 * scale;
+      const width = w0 * scale;
+      const height = h0 * scale;
 
-      const xmin = clamp(x1 - halfExpW, 0, singleImg.naturalWidth);
-      const ymin = clamp(y1 - halfExpH, 0, singleImg.naturalHeight);
-      const xmax = clamp(x2 + halfExpW, 0, singleImg.naturalWidth);
-      const ymax = clamp(y2 + halfExpH, 0, singleImg.naturalHeight);
-      const w = xmax - xmin;
-      const h = ymax - ymin;
-
-      // 뷰어 내 상대 좌표 계산
-      const left = offsetX + xmin * scale;
-      const top = offsetY + ymin * scale;
-      const width = w * scale;
-      const height = h * scale;
-
-      // 개별 줄을 위한 박스 생성
+      // 박스 생성
       const box = document.createElement('div');
       box.className = 'textbox';
       box.style.left = `${left}px`;
@@ -294,15 +287,13 @@ function renderTextBoxes(isTextHidden) {
       box.style.width = `${width}px`;
       box.style.height = `${height}px`;
 
-      // 디버깅용: 박스 테두리가 필요하면 주석 해제
-      // box.style.border = "1px solid red";
-
+      // 텍스트 생성
       const textInBox = document.createElement('div');
       textInBox.className = 'textInBox';
       textInBox.style.fontSize = `${fontSz}px`;
-      textInBox.innerHTML = lineText; // <br> join 없이 해당 줄만 넣음
+      textInBox.innerHTML = lineText;
 
-      // 세로쓰기 처리
+      // 세로쓰기 적용
       if (block.vertical) {
         textInBox.style.writingMode = 'vertical-rl';
       }
