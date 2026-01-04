@@ -1,29 +1,29 @@
 // 요소 가져오기
-const pickBtn = document.getElementById('pick-folder');
-const fileInput = document.getElementById('folder-input');
-const loadJsonBtn = document.getElementById('load-json');
-const jsonInput = document.getElementById('json-input');
-const toggleBtn = document.getElementById('toggle-mode');
-const btnPrev = document.getElementById('prev');
-const btnNext = document.getElementById('next');
-const btnFitWidth = document.getElementById('fit-width');
-const btnFitScreen = document.getElementById('fit-screen');
-const btnOriginal = document.getElementById('original');
-const btnZoomOut = document.getElementById('zoom-out');
-const btnZoomIn = document.getElementById('zoom-in');
-const viewerContainer = document.getElementById('viewer-container');
-const overlayContainer = document.getElementById('overlay-container');
-const singleImg = document.getElementById('viewer');
-const clickLeft = document.getElementById('click-left');
-const clickRight = document.getElementById('click-right');
+const pickBtn = document.getElementById("pick-folder");
+const fileInput = document.getElementById("folder-input");
+const loadJsonBtn = document.getElementById("load-json");
+const jsonInput = document.getElementById("json-input");
+const toggleBtn = document.getElementById("toggle-mode");
+const btnPrev = document.getElementById("prev");
+const btnNext = document.getElementById("next");
+const btnFitWidth = document.getElementById("fit-width");
+const btnFitScreen = document.getElementById("fit-screen");
+const btnOriginal = document.getElementById("original");
+const btnZoomOut = document.getElementById("zoom-out");
+const btnZoomIn = document.getElementById("zoom-in");
+const viewerContainer = document.getElementById("viewer-container");
+const overlayContainer = document.getElementById("overlay-container");
+const singleImg = document.getElementById("viewer");
+const clickLeft = document.getElementById("click-left");
+const clickRight = document.getElementById("click-right");
 
-const zipInput = document.getElementById('zip-input');
-const pickZipBtn = document.getElementById('pick-zip');
+const zipInput = document.getElementById("zip-input");
+const pickZipBtn = document.getElementById("pick-zip");
 
 // ✅ 추가: 투명도 버튼 참조
-const btnOpacity = document.getElementById('opacity-btn');
+const btnOpacity = document.getElementById("opacity-btn");
 
-singleImg.addEventListener('load', () => {
+singleImg.addEventListener("load", () => {
   // 이미지가 화면에 완전히 렌더링된 뒤 텍스트박스 그리기
   renderTextBoxes(isTextHidden);
 });
@@ -41,33 +41,33 @@ let files = []; //이미지 파일들
 let currentIndex = 0;
 let isWebtoonMode = false;
 //let displayMode = 'fit-screen';
-let displayMode = 'default';
+let displayMode = "default";
 let zoomFactor = 1;
 let mokuroData = null;
 
 // 스타일 적용
 function applyStyles(img) {
-  img.style.display = 'block';
-  img.style.margin = '0 auto';
-  if (displayMode === 'fit-width') {
+  img.style.display = "block";
+  img.style.margin = "0 auto";
+  if (displayMode === "fit-width") {
     img.style.width = `${zoomFactor * 100}%`;
-    img.style.height = 'auto';
-  } else if (displayMode === 'fit-screen') {
-    img.style.width = 'auto';
+    img.style.height = "auto";
+  } else if (displayMode === "fit-screen") {
+    img.style.width = "auto";
     img.style.height = `${zoomFactor * 100}vh`;
-  } else if (displayMode === 'default') {
+  } else if (displayMode === "default") {
     img.style.width = `${zoomFactor * 80}%`;
-    img.style.height = 'auto';
+    img.style.height = "auto";
   } else {
     const w = img.naturalWidth * zoomFactor;
     img.style.width = `${w}px`;
-    img.style.height = 'auto';
+    img.style.height = "auto";
   }
 }
 
 // 모든 이미지에 스타일 재적용 + 텍스트박스
 function updateAllStyles() {
-  viewerContainer.querySelectorAll('img').forEach((img) => {
+  viewerContainer.querySelectorAll("img").forEach((img) => {
     if (img.complete) applyStyles(img);
     else img.onload = () => applyStyles(img);
   });
@@ -80,37 +80,37 @@ function updateAllStyles() {
 
 // 렌더링
 function render() {
-  viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
+  viewerContainer.querySelectorAll("img").forEach((n) => n.remove());
   if (isWebtoonMode) {
     files.forEach((file) => {
-      const img = document.createElement('img');
+      const img = document.createElement("img");
       img.src = URL.createObjectURL(file);
-      img.className = 'webtoon-img';
+      img.className = "webtoon-img";
       img.onload = () => applyStyles(img);
       viewerContainer.appendChild(img);
     });
-    overlayContainer.innerHTML = '';
+    overlayContainer.innerHTML = "";
   } else {
     singleImg.src = URL.createObjectURL(files[currentIndex]);
     viewerContainer.appendChild(singleImg);
   }
   updateAllStyles();
-  btnPrev.style.display = isWebtoonMode ? 'none' : '';
-  btnNext.style.display = isWebtoonMode ? 'none' : '';
+  btnPrev.style.display = isWebtoonMode ? "none" : "";
+  btnNext.style.display = isWebtoonMode ? "none" : "";
 }
 
 // 이미지 이동 함수
 function prevImage() {
   if (!isWebtoonMode && files.length) {
     currentIndex = (currentIndex - 1 + files.length) % files.length;
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     render();
   }
 }
 function nextImage() {
   if (!isWebtoonMode && files.length) {
     currentIndex = (currentIndex + 1) % files.length;
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     render();
   }
 }
@@ -121,76 +121,90 @@ function resetZoom() {
 }
 
 // 파일 입력 (폴더)
-pickBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => {
+pickBtn.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => {
   const allFiles = Array.from(fileInput.files);
   files = allFiles
     .filter((f) => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!files.length) {
-    alert('이미지 파일이 없습니다.');
-    [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-      (btn) => (btn.disabled = true)
-    );
+    alert("이미지 파일이 없습니다.");
+    [
+      toggleBtn,
+      btnPrev,
+      btnNext,
+      btnFitWidth,
+      btnFitScreen,
+      btnOriginal,
+      btnZoomOut,
+      btnZoomIn,
+    ].forEach((btn) => (btn.disabled = true));
     return;
   }
-  [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false)
-  );
+  [
+    toggleBtn,
+    btnPrev,
+    btnNext,
+    btnFitWidth,
+    btnFitScreen,
+    btnOriginal,
+    btnZoomOut,
+    btnZoomIn,
+  ].forEach((btn) => (btn.disabled = false));
   resetZoom();
   currentIndex = 0;
   render();
 });
 
 // 웹툰 모드 토글
-toggleBtn.addEventListener('click', () => {
+toggleBtn.addEventListener("click", () => {
   isWebtoonMode = !isWebtoonMode;
-  toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
+  toggleBtn.textContent = isWebtoonMode ? "단일모드로 전환" : "웹툰모드 켜기";
   render();
 });
 
 // 버튼 이벤트 연결
-btnPrev.addEventListener('click', prevImage);
-btnNext.addEventListener('click', nextImage);
-btnFitWidth.addEventListener('click', () => {
-  displayMode = 'fit-width';
+btnPrev.addEventListener("click", prevImage);
+btnNext.addEventListener("click", nextImage);
+btnFitWidth.addEventListener("click", () => {
+  displayMode = "fit-width";
   resetZoom();
   updateAllStyles();
 });
-btnFitScreen.addEventListener('click', () => {
-  displayMode = 'fit-screen';
+btnFitScreen.addEventListener("click", () => {
+  displayMode = "fit-screen";
   resetZoom();
   updateAllStyles();
 });
-btnOriginal.addEventListener('click', () => {
-  displayMode = 'original';
+btnOriginal.addEventListener("click", () => {
+  displayMode = "original";
   resetZoom();
   updateAllStyles();
 });
-btnZoomIn.addEventListener('click', () => {
+btnZoomIn.addEventListener("click", () => {
   zoomFactor *= 1.1;
   updateAllStyles();
 });
-btnZoomOut.addEventListener('click', () => {
+btnZoomOut.addEventListener("click", () => {
   zoomFactor *= 0.9;
   updateAllStyles();
 });
-loadJsonBtn.addEventListener('click', () => jsonInput.click());
+loadJsonBtn.addEventListener("click", () => jsonInput.click());
 
 // 클릭 영역 핸들링
-clickLeft.addEventListener('click', (e) => {
+clickLeft.addEventListener("click", (e) => {
   e.stopPropagation();
   nextImage();
   updateAllStyles();
 });
-clickRight.addEventListener('click', (e) => {
+clickRight.addEventListener("click", (e) => {
   e.stopPropagation();
   prevImage();
   updateAllStyles();
 });
 
 // Shift + 마우스 휠로 줌
-viewerContainer.addEventListener('wheel', (e) => {
+viewerContainer.addEventListener("wheel", (e) => {
   if (!e.shiftKey) return;
   e.preventDefault();
   if (e.deltaY < 0) zoomFactor *= 1.1;
@@ -199,28 +213,28 @@ viewerContainer.addEventListener('wheel', (e) => {
 });
 
 // 키보드 줌
-window.addEventListener('keydown', (e) => {
-  if (e.key === '+' || e.key === '=') {
+window.addEventListener("keydown", (e) => {
+  if (e.key === "+" || e.key === "=") {
     zoomFactor *= 1.1;
     updateAllStyles();
-  } else if (e.key === '-') {
+  } else if (e.key === "-") {
     zoomFactor *= 0.9;
     updateAllStyles();
   }
 });
 
 // Mokuro 파일 입력 및 JSON 파싱
-jsonInput.addEventListener('change', () => {
+jsonInput.addEventListener("change", () => {
   const file = jsonInput.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
     try {
       mokuroData = JSON.parse(reader.result);
-      console.log('Mokuro JSON data PARSED!:', mokuroData);
+      console.log("Mokuro JSON data PARSED!:", mokuroData);
       render();
     } catch (e) {
-      console.error('Invalid JSON in Mokuro file:', e);
+      console.error("Invalid JSON in Mokuro file:", e);
     }
   };
   reader.readAsText(file);
@@ -233,18 +247,23 @@ function clamp(value, min, max) {
 
 // 텍스트박스 렌더링
 function renderTextBoxes(isTextHidden) {
-  overlayContainer.innerHTML = '';
+  //무조건 기존 오버레이 초기화
+  overlayContainer.innerHTML = "";
 
   if (isTextHidden) return;
+
+  // JSON 미로드 시 스킵 (일단 이미지만 렌더링 했을때) 이거 나중에는 무조건 이미지,json 둘다 한번에 로드하게끔 변경해야함.
   if (!mokuroData || !mokuroData.pages) return;
 
-  const page = mokuroData.pages[currentIndex];
-  if (!page || !page.blocks || page.blocks.length === 0) return;
+  const page = mokuroData.pages[currentIndex]; //현재 페이지의 내용들을 page객체에 저장
+  if (!page || !page.blocks || page.blocks.length === 0) return; // ✅ 안전 장치 추가
 
-  // 동적 폰트 크기 상한선 계산
+  // ✅ 추가: 동적 폰트 크기 상한선 계산
   const fontSizeCap = calculateDynamicFontSizeCap(page.blocks);
 
-  // 이미지 스케일 및 오프셋 계산
+  // 2) Compute image scale and its offset *inside* the viewer-container
+  //    - scale: current displayed px per natural px (aspect ratio preserved => X == Y)
+  //    - offsetX/offsetY: letterboxing gap because the img is centered in the container
   const contRect = viewerContainer.getBoundingClientRect();
   const imgRect = singleImg.getBoundingClientRect();
   const offsetX = imgRect.left - contRect.left;
@@ -252,62 +271,48 @@ function renderTextBoxes(isTextHidden) {
   const scale = singleImg.clientWidth / singleImg.naturalWidth;
 
   page.blocks.forEach((block) => {
+    const [x1, y1, x2, y2] = block.box;
+    const w0 = x2 - x1;
+    const h0 = y2 - y1;
+
+    const expand = 0; // <-- adjust if you want to grow boxes
+    const halfExpW = Math.round((w0 * expand) / 2);
+    const halfExpH = Math.round((h0 * expand) / 2);
+
+    const xmin = clamp(x1 - halfExpW, 0, singleImg.naturalWidth);
+    const ymin = clamp(y1 - halfExpH, 0, singleImg.naturalHeight);
+    const xmax = clamp(x2 + halfExpW, 0, singleImg.naturalWidth);
+    const ymax = clamp(y2 + halfExpH, 0, singleImg.naturalHeight);
+    const w = xmax - xmin;
+    const h = ymax - ymin;
+
+    // 3) Place relative to overlay (which is relative to viewer-container)
+    const left = offsetX + xmin * scale;
+    const top = offsetY + ymin * scale;
+    const width = w * scale;
+    const height = h * scale;
+
+    // ✅ 수정: 보정된 폰트 크기를 계산하여 사용
     const correctedFontSize = Math.min(block.font_size, fontSizeCap);
     const fontSz = Math.max(1, Math.round(correctedFontSize * scale));
 
-    // 무조건 줄(Line) 단위로 순회하며 그리기
-    block.lines.forEach((lineText, index) => {
-      const coords = block.lines_coords[index];
-      // coords 구조: [[x,y], [x,y], [x,y], [x,y]] (점 4개)
+    const box = document.createElement("div");
+    box.className = "textbox";
+    box.style.left = `${left}px`;
+    box.style.top = `${top}px`;
+    box.style.width = `${width}px`;
+    box.style.height = `${height}px`;
 
-      // 점 4개에서 사각형의 min/max 좌표 추출
-      // (Mokuro 데이터가 보장된다면 coords는 반드시 존재)
-      const xs = coords.map((p) => p[0]);
-      const ys = coords.map((p) => p[1]);
+    const textInBox = document.createElement("div");
+    textInBox.className = "textInBox";
+    textInBox.style.fontSize = `${fontSz}px`;
+    textInBox.innerHTML = block.lines.join("<br>");
+    if (block.vertical) textInBox.style.writingMode = "vertical-rl";
 
-      const x1 = Math.min(...xs);
-      const x2 = Math.max(...xs);
-      const y1 = Math.min(...ys);
-      const y2 = Math.max(...ys);
-
-      const w0 = x2 - x1;
-      const h0 = y2 - y1;
-
-      // 뷰어 내 좌표로 변환
-      const left = offsetX + x1 * scale;
-      const top = offsetY + y1 * scale;
-      const width = w0 * scale;
-      const height = h0 * scale;
-
-      // 박스 생성
-      const box = document.createElement('div');
-      box.className = 'textbox';
-      box.style.left = `${left}px`;
-      box.style.top = `${top}px`;
-      box.style.width = `${width}px`;
-      box.style.height = `${height}px`;
-
-      // ✅ [추가된 부분] Z-Index 역순 정렬
-      // 같은 말풍선(Block) 안에서는 첫 번째 줄(index 0)이 가장 위에 오도록 설정
-      // (예: 총 3줄이면 -> 첫줄: 3, 둘째줄: 2, 셋째줄: 1)
-      box.style.zIndex = block.lines.length - index;
-
-      // 텍스트 생성
-      const textInBox = document.createElement('div');
-      textInBox.className = 'textInBox';
-      textInBox.style.fontSize = `${fontSz}px`;
-      textInBox.innerHTML = lineText;
-
-      // 세로쓰기 적용
-      if (block.vertical) {
-        textInBox.style.writingMode = 'vertical-rl';
-      }
-
-      box.appendChild(textInBox);
-      overlayContainer.appendChild(box);
-    });
+    box.appendChild(textInBox);
+    overlayContainer.appendChild(box);
   });
-
+  // ✅ 추가: 박스들을 그린 직후 현재 투명도 반영
   applyTextOpacity();
 }
 
@@ -323,9 +328,9 @@ function renderTextBoxes(isTextHidden) {
 // lines_coords: [0], [1], [2], [3] : 말풍선안에 4개의 줄이 있고 각각의 줄에 text가 있는 형태
 
 // ZIP 선택
-pickZipBtn.addEventListener('click', () => zipInput.click());
+pickZipBtn.addEventListener("click", () => zipInput.click());
 // ZIP 파일 입력 처리 (최소한 변경)
-zipInput.addEventListener('change', async (e) => {
+zipInput.addEventListener("change", async (e) => {
   const zipFile = e.target.files[0];
   if (!zipFile) return;
 
@@ -338,7 +343,7 @@ zipInput.addEventListener('change', async (e) => {
     if (/\.(jpe?g|png|gif|bmp|webp)$/i.test(entry.name)) {
       imgEntries.push(entry);
     } else if (/\.mokuro$/i.test(entry.name)) {
-      entry.async('string').then((txt) => {
+      entry.async("string").then((txt) => {
         mokuroData = JSON.parse(txt);
       });
     }
@@ -346,39 +351,52 @@ zipInput.addEventListener('change', async (e) => {
 
   // 3) Blob → File 객체 변환하여 files에 저장
   const imageFiles = await Promise.all(
-    imgEntries.map((entry) => entry.async('blob').then((blob) => new File([blob], entry.name, { type: blob.type })))
+    imgEntries.map((entry) =>
+      entry
+        .async("blob")
+        .then((blob) => new File([blob], entry.name, { type: blob.type }))
+    )
   );
-  files = imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  files = imageFiles.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true })
+  );
 
   // 4) 기존 로직 재사용
-  [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false)
-  );
+  [
+    toggleBtn,
+    btnPrev,
+    btnNext,
+    btnFitWidth,
+    btnFitScreen,
+    btnOriginal,
+    btnZoomOut,
+    btnZoomIn,
+  ].forEach((btn) => (btn.disabled = false));
   currentIndex = 0;
   resetZoom();
   render();
 });
 
-const hideButton = document.getElementById('toggle-controls-btn');
-const controls = document.querySelector('.controls');
+const hideButton = document.getElementById("toggle-controls-btn");
+const controls = document.querySelector(".controls");
 let isHidden = false;
-hideButton.addEventListener('click', () => {
+hideButton.addEventListener("click", () => {
   isHidden = !isHidden;
-  controls.classList.toggle('hidden', isHidden);
-  hideButton.textContent = isHidden ? '컨' : '컨';
+  controls.classList.toggle("hidden", isHidden);
+  hideButton.textContent = isHidden ? "컨" : "컨";
 });
 
-const hideTextButton = document.getElementById('toggle-text-btn');
+const hideTextButton = document.getElementById("toggle-text-btn");
 let isTextHidden = false;
-hideTextButton.addEventListener('click', () => {
+hideTextButton.addEventListener("click", () => {
   isTextHidden = !isTextHidden;
   updateAllStyles();
-  hideTextButton.textContent = isTextHidden ? '제거' : '생성';
+  hideTextButton.textContent = isTextHidden ? "제거" : "생성";
   console.log(isTextHidden);
 });
 
 // ✅ 추가: 투명도 버튼 동작 (순환)
-btnOpacity.addEventListener('click', () => {
+btnOpacity.addEventListener("click", () => {
   // 1. 다음 단계로 순환
   const steps = [1.0, 0.0];
   const idx = steps.indexOf(textOpacity);
