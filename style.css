@@ -4,6 +4,26 @@ body {
   background-color: #000;
 }
 
+/* 1. 기본적으로 모든 요소의 선택을 막습니다. (이미지 긁힘 방지) */
+body, 
+#viewer-container, 
+img, 
+.webtoon-img {
+  user-select: none;           /* 표준 속성 */
+  -webkit-user-select: none;   /* 크롬, 사파리 등 */
+  -webkit-user-drag: none;     /* 이미지를 클릭해서 끌 때 반투명 이미지가 따라오는 것도 방지 */
+}
+
+/* 2. 하지만 텍스트 박스는 드래그가 되어야 하므로 'text'로 풀어줍니다. */
+/* (기존 .line-box 스타일에 이 속성이 이미 있겠지만, 확실하게 하기 위해 확인해 주세요) */
+.line-box {
+  /* ... 기존 속성들 ... */
+  
+  user-select: text;          /* 여기만 선택 가능! */
+  -webkit-user-select: text;
+  cursor: text;
+}
+
 /* 이미지 영역 */
 #viewer-container {
   position: relative;
@@ -237,10 +257,20 @@ body {
   border-radius: 3px;                         /* 모서리 살짝 둥글게 */
   box-shadow: 0 0 5px rgba(0,0,0,0.2);        /* 살짝 그림자 줘서 돋보이게 */
   z-index: 100;                               /* 다른 글자보다 위에 뜨게 */
+  cursor: pointer;
 }
 
 /* 4. 드래그했을 때의 색상 (기존 유지) */
 .hide-mode .line-box::selection {
   background-color: rgba(255, 235, 59, 1.0);
   color: #000 !important;
+}
+
+/*클릭해서 선택된 상태 (배경 노란색 유지)*/
+.line-box.selected {
+  background-color: #e2e2e2; 
+  color: #000000 !important;  /* ✅ 글자색 검정 강제 (투명/흰색 방지) */
+  opacity: 1 !important;      /* 투명도 100% 강제 */
+  z-index: 100;               /* 다른 요소보다 위에 표시 */
+  cursor: pointer;
 }

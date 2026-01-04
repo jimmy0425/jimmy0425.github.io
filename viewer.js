@@ -400,6 +400,29 @@ function renderTextBoxes(isTextHidden) {
         textBox.style.fontSize = `${targetSize * 0.95}px`;
       }
 
+      // ✅ 수정: 단일 선택 모드 (다른 거 끄고 나만 켜기)
+      // ---------------------------------------------------
+      textBox.addEventListener('click', (e) => {
+        e.stopPropagation();
+
+        // 1. 현재 화면에 켜져 있는(.selected) 모든 박스를 찾습니다.
+        const allSelected = document.querySelectorAll('.line-box.selected');
+
+        // 2. 찾은 박스들을 순회하며 끕니다.
+        // 단, '지금 클릭한 박스(textBox)'가 이미 켜져 있었다면,
+        // 아래 toggle()에서 꺼질 것이므로 여기서는 건드리지 않거나,
+        // 확실하게 "나 빼고 다 끄기"를 수행합니다.
+        allSelected.forEach((box) => {
+          if (box !== textBox) {
+            box.classList.remove('selected');
+          }
+        });
+
+        // 3. 현재 클릭한 박스의 상태를 토글합니다.
+        // (꺼져 있었으면 켜지고, 켜져 있었으면 꺼집니다)
+        textBox.classList.toggle('selected');
+      });
+
       textBox.textContent = lineText;
       textLayer.appendChild(textBox);
     });
