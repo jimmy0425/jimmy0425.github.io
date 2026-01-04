@@ -287,6 +287,11 @@ function renderTextBoxes(isTextHidden) {
       box.style.width = `${width}px`;
       box.style.height = `${height}px`;
 
+      // ✅ [추가된 부분] Z-Index 역순 정렬
+      // 같은 말풍선(Block) 안에서는 첫 번째 줄(index 0)이 가장 위에 오도록 설정
+      // (예: 총 3줄이면 -> 첫줄: 3, 둘째줄: 2, 셋째줄: 1)
+      box.style.zIndex = block.lines.length - index;
+
       // 텍스트 생성
       const textInBox = document.createElement('div');
       textInBox.className = 'textInBox';
