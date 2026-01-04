@@ -36,23 +36,18 @@ singleImg.addEventListener('load', () => {
 // ✅ 추가: 텍스트 박스 투명도 상태
 let textOpacity = 1.0; // 1.0=100%, 0.0=0%
 
-// ✅ 추가: 투명도 적용 함수 수정 (배경 레이어만 투명도 조절)
+// [수정된 투명도 적용 함수]
 function applyTextOpacity() {
-  const bgLayer = document.getElementById('bg-layer');
-  const textLayer = document.getElementById('text-layer');
+  const container = document.getElementById('overlay-container');
 
-  // 배경은 설정된 투명도 따라감
-  if (bgLayer) bgLayer.style.opacity = String(textOpacity);
+  if (!container) return;
 
-  // 텍스트는 완전히 안 보일 때(0.0)만 숨기고, 그 외엔 선명하게 유지(혹은 같이 흐리게 할지 선택)
-  // 요청하신 "글자만 있는 div"는 투명도가 0일때는 같이 안보여야 하므로:
-  if (textLayer) {
-    // 투명도가 0이면 아예 숨김, 아니면 글자는 100% (잘 보이게)
-    // 만약 글자도 흐리게 하고 싶다면 textOpacity 그대로 적용하세요.
-    textLayer.style.opacity = textOpacity === 0 ? '0' : '1';
-
-    // [선택사항] 글자 색상을 검정으로 고정하고 싶다면:
-    // textLayer.style.color = "black";
+  // textOpacity가 0이면(안보임 상태) -> .hide-mode 클래스 추가
+  // textOpacity가 1이면(보임 상태) -> .hide-mode 클래스 제거
+  if (textOpacity === 0) {
+    container.classList.add('hide-mode');
+  } else {
+    container.classList.remove('hide-mode');
   }
 }
 

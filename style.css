@@ -212,3 +212,35 @@ body {
   border-radius: 5px;
 }
 
+/* ---------------------------------------------------
+   숨김 모드 (.hide-mode) 스타일
+   - 배경 박스: 완전히 숨김
+   - 텍스트: 투명색 잉크로 변경 (드래그 시 보임)
+--------------------------------------------------- */
+
+/* 1. 배경 레이어(회색 박스들)는 아예 안 보이게 숨김 */
+.hide-mode #bg-layer {
+  opacity: 0;
+  transition: opacity 0.2s; 
+}
+
+/* 2. 텍스트 레이어 기본 상태: 글자 투명 (안 보임) */
+.hide-mode .line-box {
+  color: transparent !important; 
+  transition: color 0.1s, background-color 0.1s;
+}
+
+/* ✅ 3. 핵심: 마우스를 올린 '그 줄'만 노란색 배경 + 글자 보이기 */
+.hide-mode .line-box:hover {
+  background-color: #e2e2e2; /* 진한 노란색 (형광펜) */
+  color: #000 !important;                     /* 글자는 검정색으로 짠! */
+  border-radius: 3px;                         /* 모서리 살짝 둥글게 */
+  box-shadow: 0 0 5px rgba(0,0,0,0.2);        /* 살짝 그림자 줘서 돋보이게 */
+  z-index: 100;                               /* 다른 글자보다 위에 뜨게 */
+}
+
+/* 4. 드래그했을 때의 색상 (기존 유지) */
+.hide-mode .line-box::selection {
+  background-color: rgba(255, 235, 59, 1.0);
+  color: #000 !important;
+}
