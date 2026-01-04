@@ -149,4 +149,10 @@ body {
   height: 80px;
 }
 
+/* style.css */
+.page-nav {
+  background: #f0f0f0;
+  padding: 5px;
+  border-radius: 5px;
+}
 
