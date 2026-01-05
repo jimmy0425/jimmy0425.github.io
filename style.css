@@ -1,30 +1,42 @@
+/* =========================================
+   1. 글로벌 리셋 & 모바일 터치 하이라이트 방지
+   ========================================= */
+/* 네이버 웨일, iOS 사파리 등에서 터치 시 강제로 생기는 회색/초록색 박스 제거 */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0) !important;
+  -webkit-touch-callout: none !important; /* 이미지 길게 누름 메뉴 방지 */
+  outline: none; /* 포커스 테두리 제거 */
+}
+
 body {
   margin: 0;
   font-family: sans-serif;
   background-color: #000;
 }
 
-/* 1. 기본적으로 모든 요소의 선택을 막습니다. (이미지 긁힘 방지) */
+/* =========================================
+   2. 드래그 방지 및 허용 설정
+   ========================================= */
+/* 기본적으로 모든 요소 드래그/선택 방지 (이미지 보호) */
 body, 
 #viewer-container, 
 img, 
 .webtoon-img {
-  user-select: none;           /* 표준 속성 */
-  -webkit-user-select: none;   /* 크롬, 사파리 등 */
-  -webkit-user-drag: none;     /* 이미지를 클릭해서 끌 때 반투명 이미지가 따라오는 것도 방지 */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
 }
 
-/* 2. 하지만 텍스트 박스는 드래그가 되어야 하므로 'text'로 풀어줍니다. */
-/* (기존 .line-box 스타일에 이 속성이 이미 있겠지만, 확실하게 하기 위해 확인해 주세요) */
+/* 텍스트 박스는 드래그 가능하게 예외 처리 */
 .line-box {
-  /* ... 기존 속성들 ... */
-  
-  user-select: text;          /* 여기만 선택 가능! */
+  user-select: text;
   -webkit-user-select: text;
   cursor: text;
 }
 
-/* 이미지 영역 */
+/* =========================================
+   3. 뷰어 및 레이어 구조
+   ========================================= */
 #viewer-container {
   position: relative;
   width: 100%;
@@ -32,6 +44,7 @@ img,
   padding: 0;
   overflow: hidden;
 }
+
 #viewer,
 .webtoon-img {
   display: block;
@@ -39,7 +52,7 @@ img,
   object-fit: contain;
 }
 
-/* 오버레이 컨테이너 */
+/* 오버레이 컨테이너 (이벤트 통과) */
 #overlay-container {
   position: absolute;
   top: 0;
@@ -57,85 +70,119 @@ img,
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* 마우스 이벤트 무시 */
+  pointer-events: none;
   z-index: 1;
 }
 
-/* Layer 2: 텍스트 레이어 (드래그 가능) */
-/* Layer 2: 텍스트 레이어 (수정됨) */
+/* Layer 2: 텍스트 레이어 (껍데기는 통과, 내용은 반응) */
 #text-layer {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* ✅ 중요: 껍데기는 클릭을 통과시켜야 함! */
+  pointer-events: none; 
   z-index: 2;
 }
 
-/* 개별 라인 박스 스타일 (수정됨) */
+/* =========================================
+   4. 텍스트 박스 디자인 (핵심)
+   ========================================= */
+/* 개별 라인 박스 (글자 레이어) */
 .line-box {
   position: absolute;
-  /* display: flex;  <-- 제거 혹은 block으로 변경 */
-  display: block;    /* 기본 블록 동작 (좌측 상단 정렬) */
-  
-  /* align-items: center;      <-- 제거 (절대 필요없음) */
-  /* justify-content: center;  <-- 제거 */
-  
+  display: block;
   box-sizing: border-box;
   overflow: visible;
-  line-height: 1.0;  /* 줄 간격이 벌어지지 않게 타이트하게 설정 */
+  line-height: 1.0;
   white-space: nowrap;
-
   font-weight: bold;
   
-  pointer-events: auto; 
-  user-select: text;
-  -webkit-user-select: text;
-  cursor: text;
-
-  /* ✅ 추가: iOS/모바일에서 터치 시 생기는 기본 하이라이트(초록/회색 박스) 제거 */
-  -webkit-tap-highlight-color: transparent; 
-  outline: none; /* 포커스 테두리 제거 */
+  pointer-events: auto; /* 마우스 이벤트 받음 */
 }
 
 .line-box.vertical {
   writing-mode: vertical-rl;
 }
 
-/* 배경 박스 스타일 */
+/* 배경 박스 (회색 배경) */
 .bg-box {
   position: absolute;
   background-color: #e2e2e2;
   border-radius: 3px;
 }
 
-/* 텍스트박스 스타일 */
-.textbox {
-  position: absolute;
-  /*border: 0px solid rgb(177, 177, 177);*/
-  pointer-events: auto;
-  z-index: 16;
-}
-.textInBox {    
-  display: inline-block !important;
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 4px;
-  white-space: nowrap;
-  /*font-size: 14px;*/
-  font-weight: bold;
-  background: #e2e2e2;
-  /*border: 1px solid #ccc;*/
-  /*box-shadow: 0 2px 4px rgba(0,0,0,0.2);*/
-  z-index: 20;
-  height: auto !important;      /* 텍스트만큼만 */
-  min-height: 0 !important;     /* 부모 최소 너비 상속 차단 */
-  line-height: 1.2;
+/* [클릭 선택 상태] - 클릭 시 노란색 유지 */
+.line-box.selected {
+  background-color: #e2e2e2; 
+  color: #000000 !important;
+  opacity: 1 !important;
+  z-index: 100;
+  cursor: pointer;
 }
 
-/* 클릭 영역 */
+/* [드래그 선택 상태] - 시스템 기본 색상 */
+.line-box::selection {
+  background-color: rgba(255, 235, 59, 1.0); /* 진한 노랑 */
+  color: #000 !important;
+}
+.hide-mode .line-box::selection {
+  background-color: rgba(255, 235, 59, 1.0);
+  color: #000 !important;
+}
+
+/* ⚠️ 중요: 호버 효과(Hover)는 마우스가 있는 장치에서만 작동하도록 제한 
+   (아이패드 터치 시 Sticky Hover 방지)
+*/
+@media (hover: hover) {
+  /* 1. 일반 모드 호버: 연한 노랑 */
+  .line-box:hover {
+    background-color: rgba(255, 255, 0, 0.5);
+    cursor: text;
+  }
+
+  /* 2. 숨김 모드 호버: 해당 줄만 보이기 */
+  .hide-mode .line-box:hover {
+    background-color: #e2e2e2;
+    color: #000 !important;
+    border-radius: 3px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    cursor: pointer;
+  }
+}
+
+/* =========================================
+   5. 숨김 모드 (Hide Mode) 동작
+   ========================================= */
+/* 배경 레이어 숨김 */
+.hide-mode #bg-layer {
+  opacity: 0;
+  transition: opacity 0.2s; 
+}
+
+/* 텍스트 투명화 */
+.hide-mode .line-box {
+  color: transparent !important; 
+  transition: color 0.1s, background-color 0.1s;
+}
+
+/* 상호작용 차단 (투명도가 0일 때 JS에서 추가하는 클래스용) */
+#text-layer.no-interaction .line-box {
+  pointer-events: none !important;
+}
+
+/* =========================================
+   6. UI 컨트롤 (버튼, 네비게이션)
+   ========================================= */
+/* 페이지 이동 네비게이션 */
+.page-nav {
+  background: #f0f0f0;
+  padding: 5px;
+  border-radius: 5px;
+}
+
+/* 클릭 영역 (좌우) */
 .click-zone {
   position: fixed;
   top: 0;
@@ -148,7 +195,7 @@ img,
 #click-left { left: 0; }
 #click-right { right: 0; }
 
-/* 컨트롤 바 */
+/* 좌측 컨트롤 바 */
 .controls {
   position: fixed;
   top: 50%;
@@ -170,111 +217,29 @@ img,
   min-width: 60px;
 }
 
-/* 숨은 파일 입력 */
-#folder-input,
-#json-input {
+/* 우측 상단 플로팅 버튼들 (세로형) */
+#toggle-controls-btn,
+#toggle-text-btn,
+#opacity-btn {
+  writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
+  text-orientation: upright;
+  -webkit-text-orientation: upright;
+  position: fixed;
+  right: 10px;
+  z-index: 10000;
+  padding: 10px 16px;
+  font-size: 16px;
+  min-width: 20px;
+  height: 80px;
+}
+#toggle-controls-btn { top: 10px; }
+#toggle-text-btn { top: 100px; }
+#opacity-btn { top: 200px; }
+
+/* 유틸리티 */
+#folder-input, #json-input, #zip-input {
   position: absolute;
-  width: 0;
-  height: 0;
-  opacity: 0;
-  pointer-events: none;
+  width: 0; height: 0; opacity: 0; pointer-events: none;
 }
-
-.hidden {
-  display: none;
-}
-
-#toggle-controls-btn {
-  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
-  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
-  text-orientation: upright; /* 글자를 세로로 똑바로 */
-  -webkit-text-orientation: upright; /* iOS 대응 */
-  position: fixed;
-  top: 10px;
-  right: 10px;
-  z-index: 10000;
-  padding: 10px 16px;  
-  font-size: 16px;
-  min-width: 20px;
-  height: 80px;
-}
-
-#toggle-text-btn {
-  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
-  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
-  text-orientation: upright; /* 글자를 세로로 똑바로 */
-  -webkit-text-orientation: upright; /* iOS 대응 */
-  position: fixed;
-  top: 100px;
-  right: 10px;
-  z-index: 10000;
-  padding: 10px 16px;
-  font-size: 16px;
-  min-width: 20px;
-  height: 80px;
-}
-
-#opacity-btn{
-  writing-mode: vertical-rl; /* 세로쓰기 (위→아래, 오른쪽에서 왼쪽) */
-  -webkit-writing-mode: vertical-rl; /* iOS WebKit 대응 */
-  text-orientation: upright; /* 글자를 세로로 똑바로 */
-  -webkit-text-orientation: upright; /* iOS 대응 */
-  position: fixed;
-  top: 200px;
-  right: 10px;
-  z-index: 10000;
-  padding: 10px 16px;
-  font-size: 16px;
-  min-width: 20px;
-  height: 80px;
-}
-
-/* style.css */
-.page-nav {
-  background: #f0f0f0;
-  padding: 5px;
-  border-radius: 5px;
-}
-
-/* ---------------------------------------------------
-   숨김 모드 (.hide-mode) 스타일
-   - 배경 박스: 완전히 숨김
-   - 텍스트: 투명색 잉크로 변경 (드래그 시 보임)
---------------------------------------------------- */
-
-/* 1. 배경 레이어(회색 박스들)는 아예 안 보이게 숨김 */
-.hide-mode #bg-layer {
-  opacity: 0;
-  transition: opacity 0.2s; 
-}
-
-/* 2. 텍스트 레이어 기본 상태: 글자 투명 (안 보임) */
-.hide-mode .line-box {
-  color: transparent !important; 
-  transition: color 0.1s, background-color 0.1s;
-}
-
-/* ✅ 3. 핵심: 마우스를 올린 '그 줄'만 노란색 배경 + 글자 보이기 */
-.hide-mode .line-box:hover {
-  background-color: #e2e2e2; /* 진한 노란색 (형광펜) */
-  color: #000 !important;                     /* 글자는 검정색으로 짠! */
-  border-radius: 3px;                         /* 모서리 살짝 둥글게 */
-  box-shadow: 0 0 5px rgba(0,0,0,0.2);        /* 살짝 그림자 줘서 돋보이게 */
-  z-index: 100;                               /* 다른 글자보다 위에 뜨게 */
-  cursor: pointer;
-}
-
-/* 4. 드래그했을 때의 색상 (기존 유지) */
-.hide-mode .line-box::selection {
-  background-color: rgba(255, 235, 59, 1.0);
-  color: #000 !important;
-}
-
-/*클릭해서 선택된 상태 (배경 노란색 유지)*/
-.line-box.selected {
-  background-color: #e2e2e2; 
-  color: #000000 !important;  /* ✅ 글자색 검정 강제 (투명/흰색 방지) */
-  opacity: 1 !important;      /* 투명도 100% 강제 */
-  z-index: 100;               /* 다른 요소보다 위에 표시 */
-  cursor: pointer;
-}
+.hidden { display: none; }
