@@ -244,6 +244,12 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === '-') {
     zoomFactor *= 0.9;
     updateAllStyles();
+  } else if (e.key === 'ArrowLeft') {
+    // ✅ 왼쪽 화살표: 다음 페이지 (Manga Style)
+    nextImage();
+  } else if (e.key === 'ArrowRight') {
+    // ✅ 오른쪽 화살표: 이전 페이지 (Manga Style)
+    prevImage();
   }
 });
 
