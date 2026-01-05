@@ -387,8 +387,16 @@ function renderTextBoxes(isTextHidden) {
 
       textBox.style.left = `${lLeft}px`;
       textBox.style.top = `${lTop}px`;
-      textBox.style.width = `${lWidth}px`;
-      textBox.style.height = `${lHeight}px`;
+
+      // ✅ 수정: 고정 크기(width) 대신 최소 크기(min-width) 사용
+      // 글자가 좌표보다 짧으면 좌표 크기만큼 배경이 생기고,
+      // 글자가 좌표보다 길면 배경이 글자에 맞춰 쭉 늘어납니다.
+      textBox.style.minWidth = `${lWidth}px`;
+      textBox.style.minHeight = `${lHeight}px`;
+
+      // 명시적으로 auto를 주어 내용물에 맞게 늘어나도록 함
+      textBox.style.width = 'auto';
+      textBox.style.height = 'auto';
 
       // 폰트 크기
       if (block.font_size) {
@@ -421,6 +429,20 @@ function renderTextBoxes(isTextHidden) {
         // 3. 현재 클릭한 박스의 상태를 토글합니다.
         // (꺼져 있었으면 켜지고, 켜져 있었으면 꺼집니다)
         textBox.classList.toggle('selected');
+
+        // 4. ✅ [추가 기능] 숨김 모드(안보임) 상태라면 텍스트 자동 복사
+        // textOpacity가 0이면 숨김 모드로 간주
+        if (textOpacity === 0) {
+          // 클립보드 API 사용
+          navigator.clipboard
+            .writeText(lineText)
+            .then(() => {
+              console.log('복사 완료:', lineText);
+            })
+            .catch((err) => {
+              console.error('복사 실패:', err);
+            });
+        }
       });
 
       textBox.textContent = lineText;
@@ -636,4 +658,15 @@ pageInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     jumpToPage();
   }
+});
+
+// ✅ 추가: 빈 공간(바탕화면, 이미지 배경 등) 클릭 시 선택 초기화
+document.body.addEventListener('click', (e) => {
+  // 현재 선택된(.selected) 모든 박스를 찾아서
+  const selectedBoxes = document.querySelectorAll('.line-box.selected');
+
+  // 하나씩 순회하며 선택 해제 (초기화)
+  selectedBoxes.forEach((box) => {
+    box.classList.remove('selected');
+  });
 });

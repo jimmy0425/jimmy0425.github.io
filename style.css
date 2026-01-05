@@ -97,6 +97,9 @@ img,
   line-height: 1.0;
   white-space: nowrap;
   font-weight: bold;
+
+  /* ✅ 추가: 배경색이 글자에 너무 딱 붙지 않게 여백 추가 */
+  padding: 2px 4px;        /* 상하 2px, 좌우 4px */
   
   pointer-events: auto; /* 마우스 이벤트 받음 */
 }
@@ -112,36 +115,36 @@ img,
   border-radius: 3px;
 }
 
-/* [클릭 선택 상태] - 클릭 시 노란색 유지 */
-.line-box.selected {
-  background-color: #e2e2e2; 
+/* 1. 기본 상태에서 클릭했을 때 */
+/* .line-box.selected {
+  background-color: #e2e2e2;  
   color: #000000 !important;
   opacity: 1 !important;
   z-index: 100;
   cursor: pointer;
+} */
+
+/* ✅ 2. [핵심 수정] 숨김 모드(.hide-mode)일 때도 선택되면 글자가 보여야 함! */
+/* 이 부분이 없어서 투명색으로 남았던 것입니다. */
+.hide-mode .line-box.selected {
+  background-color: #e2e2e2;      /* 배경 회색 */
+  color: #000000 !important;     /* 글자 검은색 강제 (투명 덮어쓰기) */
+  opacity: 1 !important;         /* 불투명하게 */
 }
 
-/* [드래그 선택 상태] - 시스템 기본 색상 */
+/* 드래그해서 선택 시 노란색 하이라이트 */
 .line-box::selection {
-  background-color: rgba(255, 235, 59, 1.0); /* 진한 노랑 */
+  background-color: rgba(255, 235, 59, 1.0); 
   color: #000 !important;
-}
+} 
 .hide-mode .line-box::selection {
   background-color: rgba(255, 235, 59, 1.0);
   color: #000 !important;
 }
 
-/* ⚠️ 중요: 호버 효과(Hover)는 마우스가 있는 장치에서만 작동하도록 제한 
-   (아이패드 터치 시 Sticky Hover 방지)
-*/
+/* 호버 효과(Hover)는 마우스가 있는 장치에서만 작동하도록 제한 */
 @media (hover: hover) {
-  /* 1. 일반 모드 호버: 연한 노랑 */
-  .line-box:hover {
-    background-color: rgba(255, 255, 0, 0.5);
-    cursor: text;
-  }
-
-  /* 2. 숨김 모드 호버: 해당 줄만 보이기 */
+  /* 숨김 모드 호버: 해당 줄만 보이기 */
   .hide-mode .line-box:hover {
     background-color: #e2e2e2;
     color: #000 !important;
