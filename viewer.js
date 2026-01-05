@@ -669,4 +669,10 @@ document.body.addEventListener('click', (e) => {
   selectedBoxes.forEach((box) => {
     box.classList.remove('selected');
   });
+
+  // 2. [추가] 드래그로 긁은 텍스트(시스템 하이라이트) 해제
+  const selection = window.getSelection();
+  if (selection) {
+    selection.removeAllRanges(); // 현재 잡혀있는 모든 드래그 영역을 제거
+  }
 });
