@@ -477,10 +477,8 @@ function renderTextBoxes(isTextHidden) {
 
       // ✅ 중요: 세로쓰기는 '높이'가 꽉 차야 줄바꿈(옆으로 이동)이 일어납니다.
       if (block.vertical) {
-        // [세로쓰기]
-        // 높이를 고정해야 글자가 밑으로 끝없이 내려가지 않고 다음 줄로 꺾임
-        textBox.style.height = `${bgHeight * 1.1}px`;
-        textBox.style.width = `${bgWidth}px`; // 너비도 박스 크기에 맞춤
+        textBox.style.height = `${bgHeight * 1.15}px`;
+        textBox.style.width = `${bgWidth}px`;
       } else {
         // [가로쓰기]
         // 너비를 고정해야 글자가 옆으로 끝없이 가지 않고 다음 줄로 꺾임
