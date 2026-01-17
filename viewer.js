@@ -23,6 +23,13 @@ const pickZipBtn = document.getElementById('pick-zip');
 // ✅ 추가: 투명도 버튼 참조
 const btnOpacity = document.getElementById('opacity-btn');
 
+// ✅ 번역 보기용: 블록 내 여러 줄을 하나로 합치기 (줄바꿈 제거)
+// - '.'/ '．'가 2개 이상 연속되면 1개로 줄여 OCR의 과도한 점(.)을 완화
+function mergeBlockLines(block) {
+  if (!block || !Array.isArray(block.lines)) return '';
+  return block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.')).join('');
+}
+
 // 페이지 이동용으로 추가
 const pageInfo = document.getElementById('page-info');
 const pageInput = document.getElementById('page-input');
@@ -168,12 +175,12 @@ fileInput.addEventListener('change', () => {
   if (!files.length) {
     alert('이미지 파일이 없습니다.');
     [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-      (btn) => (btn.disabled = true)
+      (btn) => (btn.disabled = true),
     );
     return;
   }
   [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false)
+    (btn) => (btn.disabled = false),
   );
   resetZoom();
   currentIndex = 0;
@@ -280,6 +287,7 @@ function clamp(value, min, max) {
 function renderTextBoxes(isTextHidden) {
   // 1. 초기화
   overlayContainer.innerHTML = '';
+
   if (isTextHidden) return;
   if (!mokuroData || !mokuroData.pages) return;
   const page = mokuroData.pages[currentIndex];
@@ -367,93 +375,141 @@ function renderTextBoxes(isTextHidden) {
     bgLayer.appendChild(bgBox);
 
     // -------------------------------------------------------
-    // [STEP C] 텍스트 박스 생성 (라인당 1개) -> textLayer
+    // [STEP C] 텍스트 박스 생성
+    //  - 안보임(textOpacity=0): 원문 파이프라인(기존) = 라인 단위 + 이미지 1:1
+    //  - 보임(textOpacity=1): 번역 보기 파이프라인 = 줄 병합 + 블록 단위 렌더
     // -------------------------------------------------------
-    block.lines.forEach((rawLineText, index) => {
-      // ✅ 수정: 전각(．)이든 반각(.)이든 "2개 이상" 연속되면 무조건 점 1개로 통일
-      // 정규식 설명: [．.] -> 전각 점이나 반각 점이, {2,} -> 2개 이상 연속되면
-      const lineText = rawLineText.replace(/[．.]{2,}/g, '.');
+    const isTranslatedView = textOpacity === 1;
 
-      const coords = correctedCoords[index];
-      const bounds = getPolygonBounds(coords); // 개별 라인의 바운딩 박스
+    if (!isTranslatedView) {
+      // =========================
+      // 원문 파이프라인 (기존)
+      // =========================
+      block.lines.forEach((rawLineText, index) => {
+        // ✅ 전각(．)이든 반각(.)이든 "2개 이상" 연속되면 점 1개로 통일
+        // - 엄밀히 필수는 아니지만, OCR이 "．．．" 같은 출력을 많이 만들어서
+        //   복사/번역 품질을 약간 올려줌(비용 0에 가까움)
+        const lineText = String(rawLineText ?? '').replace(/[．.]{2,}/g, '.');
 
-      const lx1 = clamp(bounds.x, 0, singleImg.naturalWidth);
-      const ly1 = clamp(bounds.y, 0, singleImg.naturalHeight);
+        const coords = correctedCoords[index];
+        const bounds = getPolygonBounds(coords); // 개별 라인의 바운딩 박스
 
-      const lLeft = offsetX + lx1 * scale;
-      const lTop = offsetY + ly1 * scale;
-      const lWidth = bounds.w * scale;
-      const lHeight = bounds.h * scale;
+        const lx1 = clamp(bounds.x, 0, singleImg.naturalWidth);
+        const ly1 = clamp(bounds.y, 0, singleImg.naturalHeight);
+
+        const lLeft = offsetX + lx1 * scale;
+        const lTop = offsetY + ly1 * scale;
+        const lWidth = bounds.w * scale;
+        const lHeight = bounds.h * scale;
+
+        const textBox = document.createElement('div');
+        textBox.className = 'line-box';
+        if (block.vertical) {
+          textBox.classList.add('vertical');
+        }
+
+        textBox.style.left = `${lLeft}px`;
+        textBox.style.top = `${lTop}px`;
+
+        // ✅ 고정(width) 대신 최소(min-width) 사용
+        textBox.style.minWidth = `${lWidth}px`;
+        textBox.style.minHeight = `${lHeight}px`;
+        textBox.style.width = 'auto';
+        textBox.style.height = 'auto';
+
+        // 폰트 크기
+        if (block.font_size) {
+          const scaledFontSize = block.font_size * scale;
+          const finalFontSize = scaledFontSize * 0.98;
+          textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
+        } else {
+          const targetSize = block.vertical ? bounds.w * scale : bounds.h * scale;
+          textBox.style.fontSize = `${targetSize * 0.95}px`;
+        }
+
+        // ✅ 단일 선택 모드 (나만 켜기)
+        textBox.addEventListener('click', (e) => {
+          e.stopPropagation();
+
+          const allSelected = document.querySelectorAll('.line-box.selected');
+          allSelected.forEach((box) => {
+            if (box !== textBox) box.classList.remove('selected');
+          });
+
+          textBox.classList.toggle('selected');
+
+          // ✅ 숨김 모드(안보임)일 때 자동 복사
+          if (textOpacity === 0) {
+            navigator.clipboard
+              .writeText(lineText)
+              .then(() => console.log('복사 완료:', lineText))
+              .catch((err) => console.error('복사 실패:', err));
+          }
+        });
+
+        textBox.textContent = lineText;
+        textLayer.appendChild(textBox);
+      });
+    } else {
+      // =========================
+      // 번역 보기 파이프라인
+      // - 같은 블록의 여러 줄을 합쳐서 "통짜 문장" DOM을 만들고,
+      //   브라우저 번역(또는 향후 API 번역)에 유리하게 함
+      // =========================
+      // 1) 병합(번역 입력용)
+      const originalLines = Array.isArray(block.lines)
+        ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
+        : [];
+      const mergedText = originalLines.join('');
+      if (!mergedText) return;
 
       const textBox = document.createElement('div');
       textBox.className = 'line-box';
+      textBox.classList.add('translated');
+
       if (block.vertical) {
         textBox.classList.add('vertical');
       }
 
-      textBox.style.left = `${lLeft}px`;
-      textBox.style.top = `${lTop}px`;
+      // 블록 전체 박스 기준 배치
+      textBox.style.left = `${bgLeft}px`;
+      textBox.style.top = `${bgTop}px`;
 
-      // ✅ 수정: 고정 크기(width) 대신 최소 크기(min-width) 사용
-      // 글자가 좌표보다 짧으면 좌표 크기만큼 배경이 생기고,
-      // 글자가 좌표보다 길면 배경이 글자에 맞춰 쭉 늘어납니다.
-      textBox.style.minWidth = `${lWidth}px`;
-      textBox.style.minHeight = `${lHeight}px`;
+      // ✅ 중요: 세로쓰기는 '높이'가 꽉 차야 줄바꿈(옆으로 이동)이 일어납니다.
+      if (block.vertical) {
+        // [세로쓰기]
+        // 높이를 고정해야 글자가 밑으로 끝없이 내려가지 않고 다음 줄로 꺾임
+        textBox.style.height = `${bgHeight * 1.1}px`;
+        textBox.style.width = `${bgWidth}px`; // 너비도 박스 크기에 맞춤
+      } else {
+        // [가로쓰기]
+        // 너비를 고정해야 글자가 옆으로 끝없이 가지 않고 다음 줄로 꺾임
+        textBox.style.width = `${bgWidth}px`;
+        textBox.style.height = 'auto';
+      }
 
-      // 명시적으로 auto를 주어 내용물에 맞게 늘어나도록 함
-      textBox.style.width = 'auto';
-      textBox.style.height = 'auto';
-
-      // 폰트 크기
+      // 폰트 크기 로직 유지
       if (block.font_size) {
         const scaledFontSize = block.font_size * scale;
         const finalFontSize = scaledFontSize * 0.98;
         textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
-      } else {
-        const targetSize = block.vertical ? bounds.w * scale : bounds.h * scale;
-        textBox.style.fontSize = `${targetSize * 0.95}px`;
       }
 
-      // ✅ 수정: 단일 선택 모드 (다른 거 끄고 나만 켜기)
-      // ---------------------------------------------------
+      // 클릭 선택 로직 유지
       textBox.addEventListener('click', (e) => {
         e.stopPropagation();
-
-        // 1. 현재 화면에 켜져 있는(.selected) 모든 박스를 찾습니다.
         const allSelected = document.querySelectorAll('.line-box.selected');
-
-        // 2. 찾은 박스들을 순회하며 끕니다.
-        // 단, '지금 클릭한 박스(textBox)'가 이미 켜져 있었다면,
-        // 아래 toggle()에서 꺼질 것이므로 여기서는 건드리지 않거나,
-        // 확실하게 "나 빼고 다 끄기"를 수행합니다.
         allSelected.forEach((box) => {
-          if (box !== textBox) {
-            box.classList.remove('selected');
-          }
+          if (box !== textBox) box.classList.remove('selected');
         });
-
-        // 3. 현재 클릭한 박스의 상태를 토글합니다.
-        // (꺼져 있었으면 켜지고, 켜져 있었으면 꺼집니다)
         textBox.classList.toggle('selected');
-
-        // 4. ✅ [추가 기능] 숨김 모드(안보임) 상태라면 텍스트 자동 복사
-        // textOpacity가 0이면 숨김 모드로 간주
-        if (textOpacity === 0) {
-          // 클립보드 API 사용
-          navigator.clipboard
-            .writeText(lineText)
-            .then(() => {
-              console.log('복사 완료:', lineText);
-            })
-            .catch((err) => {
-              console.error('복사 실패:', err);
-            });
-        }
       });
 
-      textBox.textContent = lineText;
+      // ✅ 핵심: 줄바꿈 가공 없이 그대로!
+      textBox.textContent = mergedText;
+
       textLayer.appendChild(textBox);
-    });
+    }
   });
 
   // 5. 투명도 적용
@@ -548,13 +604,13 @@ zipInput.addEventListener('change', async (e) => {
 
   // 3) Blob → File 객체 변환하여 files에 저장
   const imageFiles = await Promise.all(
-    imgEntries.map((entry) => entry.async('blob').then((blob) => new File([blob], entry.name, { type: blob.type })))
+    imgEntries.map((entry) => entry.async('blob').then((blob) => new File([blob], entry.name, { type: blob.type }))),
   );
   files = imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
   // 4) 기존 로직 재사용
   [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false)
+    (btn) => (btn.disabled = false),
   );
   currentIndex = 0;
   resetZoom();
@@ -595,6 +651,11 @@ btnOpacity.addEventListener('click', () => {
   } else {
     btnOpacity.textContent = `보임`;
   }
+
+  // ✅ 모드(원문/번역 보기)가 바뀌었으므로 오버레이를 다시 생성해야 함
+  // - 안보임: 라인 단위
+  // - 보임: 블록 단위(줄 병합)
+  renderTextBoxes(isTextHidden);
 });
 
 /**

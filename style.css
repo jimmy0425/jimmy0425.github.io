@@ -104,6 +104,26 @@ img,
   pointer-events: auto; /* 마우스 이벤트 받음 */
 }
 
+/* =========================================
+   4-1. 번역 보기 전용(줄바꿈 허용)
+   ========================================= */
+.line-box.translated {
+  /* 1. 줄바꿈 허용 */
+  white-space: normal !important;
+  
+  /* 2. 강제 줄바꿈 (박스 크기를 넘어가면 무조건 자름) */
+  word-break: break-all !important;
+  overflow-wrap: anywhere;
+
+  /* 3. 줄간격 조정 (취향에 맞게 조절) */
+  line-height: 1.3;
+  
+  /* ⛔ 주의: writing-mode 설정 삭제! 
+     (원본이 세로쓰기면 .vertical 클래스가 붙어서 자동으로 세로가 됨) */
+}
+
+
+
 .line-box.vertical {
   writing-mode: vertical-rl;
 }
@@ -223,7 +243,8 @@ img,
 /* 우측 상단 플로팅 버튼들 (세로형) */
 #toggle-controls-btn,
 #toggle-text-btn,
-#opacity-btn {
+#opacity-btn
+ {
   writing-mode: vertical-rl;
   -webkit-writing-mode: vertical-rl;
   text-orientation: upright;
