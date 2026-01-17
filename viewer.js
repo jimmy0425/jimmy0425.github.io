@@ -404,6 +404,7 @@ function renderTextBoxes(isTextHidden) {
 
         const textBox = document.createElement('div');
         textBox.className = 'line-box';
+
         if (block.vertical) {
           textBox.classList.add('vertical');
         }
@@ -467,23 +468,19 @@ function renderTextBoxes(isTextHidden) {
       textBox.className = 'line-box';
       textBox.classList.add('translated');
 
-      if (block.vertical) {
-        textBox.classList.add('vertical');
-      }
-
       // 블록 전체 박스 기준 배치
       textBox.style.left = `${bgLeft}px`;
       textBox.style.top = `${bgTop}px`;
 
       // ✅ 중요: 세로쓰기는 '높이'가 꽉 차야 줄바꿈(옆으로 이동)이 일어납니다.
       if (block.vertical) {
-        textBox.style.height = `${bgHeight * 1.15}px`;
+        textBox.style.height = `${bgHeight}px`;
         textBox.style.width = `${bgWidth}px`;
       } else {
         // [가로쓰기]
         // 너비를 고정해야 글자가 옆으로 끝없이 가지 않고 다음 줄로 꺾임
-        textBox.style.width = `${bgWidth}px`;
-        textBox.style.height = 'auto';
+        textBox.style.width = `${bgWidth * 1.1}px`;
+        textBox.style.height = `${bgHeight}px`;
       }
 
       // 폰트 크기 로직 유지

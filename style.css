@@ -15,7 +15,6 @@ body {
   margin: 0;
   font-family: -apple-system, "Noto Sans KR", "Noto Sans JP", sans-serif;
   background-color: #000;
-  word-spacing: 0;  
 }
 
 
@@ -114,22 +113,12 @@ img,
    ========================================= */
 .line-box.translated {
   white-space: normal !important;
-  word-break: break-all !important;
-  overflow-wrap: anywhere;
-  line-height: 1.1 !important;  
+  word-break: break-all !important; /*이건 절대 바꾸면 안됨*/
+  line-height: 1.0 !important;  
 }
 
 .line-box.vertical {
-  writing-mode: vertical-rl;  
-}
-
-@media not all and (min-resolution:.001dpcm) {
-  @supports (-webkit-appearance:none) {
-    .line-box.vertical.translated {
-      transform-origin: top center;
-      transform: scaleY(0.92);   /* 먼저 0.9부터 */
-    }
-  }
+  writing-mode: vertical-rl; 
 }
 
 
