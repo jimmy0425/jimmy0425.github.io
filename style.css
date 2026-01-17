@@ -130,11 +130,41 @@ img,
   letter-spacing: -0.05em; 
 }
 
-
-
 .line-box.vertical {
   writing-mode: vertical-rl;
 }
+
+/* =========================================
+   iOS(iPad Safari) 자간 강제 타이트닝 (핵심)
+   - kerning/feature가 자간을 벌리는 경우가 있어 iOS에서 꺼줌
+   - letter-spacing이 덜 먹히면 scaleX로 최종 보정
+   ========================================= */
+@supports (-webkit-touch-callout: none) {
+  /* 모든 텍스트박스 기본 자간을 iOS에서만 더 조여줌 */
+  .line-box {
+    font-kerning: none;
+    font-feature-settings: "kern" 0;
+    letter-spacing: -0.06em;   /* 필요하면 -0.08em까지 */
+    word-spacing: -0.02em;     /* 공백도 살짝 줄이기 */
+  }
+
+  /* 번역 보기(줄바꿈) 쪽은 더 타이트하게 */
+  .line-box.translated {
+    letter-spacing: -0.08em;  /* 필요하면 -0.10em까지 */
+    font-feature-settings: "kern" 0;
+    transform: scaleX(0.97);  /* letter-spacing이 씹힐 때 최종 필살기 */
+    transform-origin: top left;
+  }
+
+  /* 세로쓰기에는 scaleX가 부작용 날 수 있어서 꺼둠 */
+  .line-box.vertical.translated {
+    transform: none;
+  }
+}
+
+
+
+
 
 /* 배경 박스 (회색 배경) */
 .bg-box {
