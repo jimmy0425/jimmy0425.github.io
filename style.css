@@ -7,27 +7,24 @@
   -webkit-touch-callout: none !important; /* 이미지 길게 누름 메뉴 방지 */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
-  font-kerning: none;
   text-rendering: geometricPrecision;
   outline: none; /* 포커스 테두리 제거 */
-}
-html, body {
-  /* ✅ iOS에서 글자 크기 자동 뻥튀기 방지 */
-  -webkit-text-size-adjust: 100%;
-  text-size-adjust: 100%;
-  
-  /* 기존 설정 유지 */
-  margin: 0;
-  /* ... */
 }
 
 body {
   margin: 0;
   font-family: -apple-system, "Noto Sans KR", "Noto Sans JP", sans-serif;
   background-color: #000;
-  letter-spacing: 0;
   word-spacing: 0;  
 }
+
+@supports (-webkit-touch-callout: none) {
+  body {
+    font-kerning: none;
+    letter-spacing: -0.04em;     
+  }
+}
+
 
 /* =========================================
    2. 드래그 방지 및 허용 설정
