@@ -312,6 +312,9 @@ function renderTextBoxes(isTextHidden) {
   const offsetY = imgRect.top - contRect.top;
   const scale = singleImg.clientWidth / singleImg.naturalWidth;
 
+  // ✅ 페이지 단위 font-size cap (원본 좌표계 기준)
+  const fontSizeCap = calculateDynamicFontSizeCap(page.blocks); // e.g. median * 1.2
+
   // 4. 블록 순회
   page.blocks.forEach((block) => {
     // 안전 장치
@@ -427,7 +430,10 @@ function renderTextBoxes(isTextHidden) {
 
         // 폰트 크기
         if (block.font_size) {
-          const scaledFontSize = block.font_size * scale;
+          // ✅ cap은 "scale 적용 전"에 걸어야 페이지 전체 기준이 흔들리지 않음
+          const cappedRawFont = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
+
+          const scaledFontSize = cappedRawFont * scale;
           const finalFontSize = scaledFontSize * 0.98;
           textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
         } else {
@@ -492,11 +498,13 @@ function renderTextBoxes(isTextHidden) {
 
       // 폰트 크기 로직 유지
       if (block.font_size) {
-        const scaledFontSize = block.font_size * scale;
+        // ✅ cap은 "scale 적용 전"에 걸어야 페이지 전체 기준이 흔들리지 않음
+        const cappedRawFont = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
+
+        const scaledFontSize = cappedRawFont * scale;
         const finalFontSize = scaledFontSize * 0.98;
         textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
       }
-
       // 클릭 선택 로직 유지
       textBox.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -669,22 +677,22 @@ function calculateDynamicFontSizeCap(blocks) {
   // 1. 모든 폰트 사이즈를 배열로 추출
   const fontSizes = blocks.map((block) => block.font_size);
 
-  // 2. 텍스트 블록이 3개 미만이면 통계가 무의미하므로 매우 큰 값을 반환 (사실상 제한 없음)
-  // if (fontSizes.length < 3) {
-  //   return 9999;
-  // }
-
-  // 3. 중앙값(Median) 계산
   const sortedSizes = [...fontSizes].sort((a, b) => a - b);
-  const midIndex = Math.floor(sortedSizes.length / 2);
-  const median = sortedSizes[midIndex];
+  let median;
 
-  // 4. 중앙값의 2.5배를 최대 허용치로 설정. 이 배수는 조절 가능합니다.
+  if (sortedSizes.length % 2 === 0) {
+    // 짝수면 lower median
+    median = sortedSizes[sortedSizes.length / 2 - 1];
+  } else {
+    median = sortedSizes[Math.floor(sortedSizes.length / 2)];
+  }
+
+  // 4. 중앙값의 1.2배를 최대 허용치로 설정. 이 배수는 조절 가능합니다.
   const OUTLIER_MULTIPLIER = 1.2;
   const cap = median * OUTLIER_MULTIPLIER;
 
   // 5. 최소 캡 값을 보장 (예: 기본 폰트 크기가 매우 작은 경우를 대비)
-  const MINIMUM_CAP = 15;
+  const MINIMUM_CAP = 10;
 
   return Math.max(cap, MINIMUM_CAP);
 }
