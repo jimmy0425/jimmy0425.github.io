@@ -262,3 +262,46 @@ img,
   width: 0; height: 0; opacity: 0; pointer-events: none;
 }
 .hidden { display: none; }
+
+
+
+/* style.css 맨 아래에 추가하거나 적절한 위치에 삽입 */
+
+/* 웹툰 모드: 이미지 + 오버레이를 감싸는 컨테이너 */
+.webtoon-wrapper {
+  position: relative; /* 중요: 내부 오버레이의 기준점 */
+  width: 100%;        /* 혹은 fit-content, 상황에 따라 조절 */
+  margin: 0 auto;     /* 중앙 정렬 */
+  display: flex;
+  justify-content: center;
+}
+
+/* 웹툰 모드 전용 오버레이 */
+.webtoon-overlay {
+  position: absolute;
+  top: 0;
+  left: 0; /* 이미지 위에 딱 붙게 JS에서 제어하거나, Wrapper 기준 0,0 */
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* =========================================
+   추가: 숨김 모드일 때 회색 배경 박스(.bg-box) 아예 숨기기
+   ========================================= */
+.hide-mode .bg-box {
+  display: none !important;
+}
+
+/* 2. 안보임 모드일 때: 평소엔 투명하다가 호버 시에만 보이기 */
+/* (모바일 호버 방지 @media 쿼리 내부에 있다면 그대로 두셔도 됩니다) */
+@media (hover: hover) {
+  .hide-mode .line-box:hover {
+    background-color: #e2e2e2;
+    color: #000 !important;
+    opacity: 1 !important; /* 투명도 강제 복구 */
+    border-radius: 3px;
+    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    z-index: 100;
+    cursor: pointer;
+  }
+}

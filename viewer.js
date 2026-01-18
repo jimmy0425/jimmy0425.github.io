@@ -45,17 +45,28 @@ let textOpacity = 1.0; // 1.0=100%, 0.0=0%
 
 // [수정된 투명도 적용 함수]
 function applyTextOpacity() {
-  const container = document.getElementById('overlay-container');
+  // 1. 단일 모드 오버레이
+  const singleContainer = document.getElementById('overlay-container');
+  // 2. 웹툰 모드 오버레이들 (현재 렌더링된 모든 것)
+  const webtoonContainers = document.querySelectorAll('.webtoon-overlay');
 
-  if (!container) return;
+  const isHidden = textOpacity === 0;
 
-  // textOpacity가 0이면(안보임 상태) -> .hide-mode 클래스 추가
-  // textOpacity가 1이면(보임 상태) -> .hide-mode 클래스 제거
-  if (textOpacity === 0) {
-    container.classList.add('hide-mode');
-  } else {
-    container.classList.remove('hide-mode');
-  }
+  // 헬퍼 함수: 요소에 hide-mode 클래스 토글
+  const toggleClass = (el) => {
+    if (!el) return;
+    if (isHidden) {
+      el.classList.add('hide-mode');
+    } else {
+      el.classList.remove('hide-mode');
+    }
+  };
+
+  // 단일 모드 적용
+  toggleClass(singleContainer);
+
+  // 웹툰 모드 적용 (모든 이미지에 대해 반복)
+  webtoonContainers.forEach((el) => toggleClass(el));
 }
 
 // 상태 변수
@@ -103,29 +114,49 @@ function updateAllStyles() {
 // 렌더링
 function render() {
   viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
+  // ✅ 웹툰 모드 래퍼들도 싹 지워야 함 (기존 코드는 img만 지웠음)
+  viewerContainer.querySelectorAll('.webtoon-wrapper').forEach((n) => n.remove());
 
   if (isWebtoonMode) {
     // [웹툰 모드]
-    files.forEach((file) => {
+    overlayContainer.innerHTML = ''; // 단일 모드용 오버레이 초기화
+
+    files.forEach((file, idx) => {
+      // 1. 래퍼(Wrapper) 생성
+      const wrapper = document.createElement('div');
+      wrapper.className = 'webtoon-wrapper';
+
+      // 2. 이미지 생성
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.className = 'webtoon-img';
-      // 웹툰 모드에서도 로드 완료 후 스타일 적용
+
+      // 3. 개별 오버레이 생성
+      const localOverlay = document.createElement('div');
+      localOverlay.className = 'webtoon-overlay';
+
+      // 4. 구조 조립: Wrapper > [Img, Overlay]
+      wrapper.appendChild(img);
+      wrapper.appendChild(localOverlay);
+      viewerContainer.appendChild(wrapper);
+
+      // 5. 로드 완료 후 스타일 및 텍스트 렌더링
       img.onload = () => {
         applyStyles(img);
-        // 웹툰 모드는 오버레이가 없으므로 여기서 끝
-      };
-      viewerContainer.appendChild(img);
-    });
-    overlayContainer.innerHTML = '';
-  } else {
-    // [단일 이미지 모드]
-    // 1. 이미지가 로드된 "후에" 스타일과 텍스트박스를 그리도록 설정
-    singleImg.onload = () => {
-      updateAllStyles(); // 이 함수가 내부적으로 renderTextBoxes를 호출함
-    };
 
-    // 2. 소스 할당 (이 시점에 로딩 시작)
+        // ★ 핵심: 이 이미지(idx)에 해당하는 텍스트 박스를 localOverlay에 그리기
+        // (아래에서 만들 drawPageText 함수 호출)
+        drawPageText(idx, img, localOverlay);
+
+        // ✅ [추가] 텍스트를 그린 직후, 현재 투명도 설정(hide-mode)을 즉시 적용
+        applyTextOpacity();
+      };
+    });
+  } else {
+    // [단일 이미지 모드] (기존 로직 유지)
+    singleImg.onload = () => {
+      updateAllStyles(); // 내부에서 renderTextBoxes 호출함
+    };
     singleImg.src = URL.createObjectURL(files[currentIndex]);
     viewerContainer.appendChild(singleImg);
   }
@@ -282,58 +313,49 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-// 텍스트박스 렌더링
-// 텍스트박스 렌더링 (라인 단위 + 2 Layer 방식)
-function renderTextBoxes(isTextHidden) {
-  // 1. 초기화
-  overlayContainer.innerHTML = '';
-
+/**
+ * 특정 페이지(pageIndex)의 텍스트 블록을
+ * 특정 이미지(imgEl) 기준으로 계산하여
+ * 특정 레이어(targetLayer)에 그리는 함수
+ */
+function drawPageText(pageIndex, imgEl, targetLayer) {
+  // 1. 예외 처리
   if (isTextHidden) return;
   if (!mokuroData || !mokuroData.pages) return;
-  const page = mokuroData.pages[currentIndex];
+  const page = mokuroData.pages[pageIndex];
   if (!page || !page.blocks || page.blocks.length === 0) return;
+  if (imgEl.naturalWidth === 0) return;
 
-  // ✅ 추가: 이미지가 아직 로드되지 않아 너비가 0이라면 계산 중단 (에러 방지)
-  if (singleImg.naturalWidth === 0) return;
+  // 2. 좌표 계산 준비
+  // 웹툰 모드는 Wrapper(relative) 기준이므로 offset이 0일 수 있음.
+  // 하지만 img가 Wrapper 내에서 margin: auto 등으로 이동했다면 계산 필요.
+  // 가장 확실한 방법: img의 좌표 - targetLayer(부모)의 좌표
 
-  // 2. 레이어 생성
-  const bgLayer = document.createElement('div');
-  bgLayer.id = 'bg-layer';
-  const textLayer = document.createElement('div');
-  textLayer.id = 'text-layer';
+  // (단, .webtoon-wrapper > .webtoon-overlay 구조에서는 둘 다 (0,0) 시작이므로 offset=0 가정 가능)
+  // (단일 모드는 viewerContainer 기준이므로 기존 로직 필요)
 
-  overlayContainer.appendChild(bgLayer);
-  overlayContainer.appendChild(textLayer);
+  // 여기서는 범용성을 위해 getBoundingClientRect 차이를 구함
+  const imgRect = imgEl.getBoundingClientRect();
+  const layerRect = targetLayer.getBoundingClientRect(); // 부모 혹은 자신
 
-  // 3. 이미지 배율 및 오프셋 계산
-  const contRect = viewerContainer.getBoundingClientRect();
-  const imgRect = singleImg.getBoundingClientRect();
-  const offsetX = imgRect.left - contRect.left;
-  const offsetY = imgRect.top - contRect.top;
-  const scale = singleImg.clientWidth / singleImg.naturalWidth;
+  // 오버레이가 이미지와 완전히 겹쳐 있다고 가정할 때의 오프셋
+  const offsetX = imgRect.left - layerRect.left;
+  const offsetY = imgRect.top - layerRect.top;
 
-  // ✅ 페이지 단위 font-size cap (원본 좌표계 기준)
-  const fontSizeCap = calculateDynamicFontSizeCap(page.blocks); // e.g. median * 1.2
+  const scale = imgEl.clientWidth / imgEl.naturalWidth;
+  const fontSizeCap = calculateDynamicFontSizeCap(page.blocks);
 
-  // 4. 블록 순회
+  // 3. 블록 순회 및 생성 (기존 로직 재사용)
   page.blocks.forEach((block) => {
-    // 안전 장치
-    if (!block.lines || !block.lines_coords || block.lines.length !== block.lines_coords.length) {
-      return;
-    }
+    if (!block.lines || !block.lines_coords) return;
 
-    // 세로쓰기 보정된 좌표 가져오기
     const correctedCoords = fixVerticalLineCoords(block);
 
-    // -------------------------------------------------------
-    // [STEP A] 블록 전체를 감싸는 '통합 바운딩 박스' 계산
-    // -------------------------------------------------------
+    // [STEP A] 통합 바운딩 박스 계산
     let bMinX = Infinity,
       bMinY = Infinity,
       bMaxX = -Infinity,
       bMaxY = -Infinity;
-
-    // 블록 내의 모든 라인, 모든 점을 순회하며 가장 바깥쪽 좌표 찾기
     correctedCoords.forEach((line) => {
       line.forEach(([x, y]) => {
         if (x < bMinX) bMinX = x;
@@ -343,186 +365,156 @@ function renderTextBoxes(isTextHidden) {
       });
     });
 
-    // 1. 원본 박스의 너비와 높이를 먼저 계산합니다.
     const rawWidth = bMaxX - bMinX;
     const rawHeight = bMaxY - bMinY;
-
-    // 2. 여백을 계산합니다. (0.05 = 5%)
-    let padX = 0;
+    let padX = block.lines.length === 2 || block.lines.length === 3 ? rawWidth * 0.25 : rawWidth * 0.1;
     const padY = rawHeight * 0.03;
 
-    // 라인이 2개 or 3개인 경우 → 좌우 너비 20%
-    if (block.lines.length === 2 || block.lines.length === 3) {
-      padX = rawWidth * 0.25;
-    } else {
-      padX = rawWidth * 0.1;
-    }
+    const bx1 = clamp(bMinX - padX, 0, imgEl.naturalWidth);
+    const by1 = clamp(bMinY - padY, 0, imgEl.naturalHeight);
+    const bx2 = clamp(bMaxX + padX, 0, imgEl.naturalWidth);
+    const by2 = clamp(bMaxY + padY, 0, imgEl.naturalHeight);
 
-    // 상하좌우로 padding만큼 넓힘 (이미지 밖으로 나가지 않게 clamp 적용)
-    const bx1 = clamp(bMinX - padX, 0, singleImg.naturalWidth);
-    const by1 = clamp(bMinY - padY, 0, singleImg.naturalHeight);
-    const bx2 = clamp(bMaxX + padX, 0, singleImg.naturalWidth);
-    const by2 = clamp(bMaxY + padY, 0, singleImg.naturalHeight);
-
-    const bw = bx2 - bx1;
-    const bh = by2 - by1;
-
-    // 뷰어상 실제 위치 변환
     const bgLeft = offsetX + bx1 * scale;
     const bgTop = offsetY + by1 * scale;
-    const bgWidth = bw * scale;
-    const bgHeight = bh * scale;
+    const bgWidth = (bx2 - bx1) * scale;
+    const bgHeight = (by2 - by1) * scale;
 
-    // -------------------------------------------------------
-    // [STEP B] 배경 박스 생성 (블록당 1개) -> bgLayer
-    // -------------------------------------------------------
+    // [STEP B] 배경 박스
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';
     bgBox.style.left = `${bgLeft}px`;
     bgBox.style.top = `${bgTop}px`;
     bgBox.style.width = `${bgWidth}px`;
     bgBox.style.height = `${bgHeight}px`;
-    bgLayer.appendChild(bgBox);
+    targetLayer.appendChild(bgBox);
 
-    // -------------------------------------------------------
-    // [STEP C] 텍스트 박스 생성
-    //  - 안보임(textOpacity=0): 원문 파이프라인(기존) = 라인 단위 + 이미지 1:1
-    //  - 보임(textOpacity=1): 번역 보기 파이프라인 = 줄 병합 + 블록 단위 렌더
-    // -------------------------------------------------------
+    // [STEP C] 텍스트 박스 (보임/안보임 분기)
     const isTranslatedView = textOpacity === 1;
 
     if (!isTranslatedView) {
-      // =========================
-      // 원문 파이프라인 (기존)
-      // =========================
+      // (기존) 원문 파이프라인
       block.lines.forEach((rawLineText, index) => {
-        // ✅ 전각(．)이든 반각(.)이든 "2개 이상" 연속되면 점 1개로 통일
-        // - 엄밀히 필수는 아니지만, OCR이 "．．．" 같은 출력을 많이 만들어서
-        //   복사/번역 품질을 약간 올려줌(비용 0에 가까움)
         const lineText = String(rawLineText ?? '').replace(/[．.]{2,}/g, '.');
-
         const coords = correctedCoords[index];
-        const bounds = getPolygonBounds(coords); // 개별 라인의 바운딩 박스
+        const bounds = getPolygonBounds(coords);
 
-        const lx1 = clamp(bounds.x, 0, singleImg.naturalWidth);
-        const ly1 = clamp(bounds.y, 0, singleImg.naturalHeight);
-
-        const lLeft = offsetX + lx1 * scale;
-        const lTop = offsetY + ly1 * scale;
+        const lLeft = offsetX + clamp(bounds.x, 0, imgEl.naturalWidth) * scale;
+        const lTop = offsetY + clamp(bounds.y, 0, imgEl.naturalHeight) * scale;
         const lWidth = bounds.w * scale;
         const lHeight = bounds.h * scale;
 
         const textBox = document.createElement('div');
         textBox.className = 'line-box';
-
-        if (block.vertical) {
-          textBox.classList.add('vertical');
-        }
-
+        if (block.vertical) textBox.classList.add('vertical');
         textBox.style.left = `${lLeft}px`;
         textBox.style.top = `${lTop}px`;
-
-        // ✅ 고정(width) 대신 최소(min-width) 사용
         textBox.style.minWidth = `${lWidth}px`;
         textBox.style.minHeight = `${lHeight}px`;
-        textBox.style.width = 'auto';
-        textBox.style.height = 'auto';
 
         // 폰트 크기
         if (block.font_size) {
-          // ✅ cap은 "scale 적용 전"에 걸어야 페이지 전체 기준이 흔들리지 않음
-          const cappedRawFont = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
-
-          const scaledFontSize = cappedRawFont * scale;
-          const finalFontSize = scaledFontSize * 0.98;
-          textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
+          const capped = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
+          textBox.style.fontSize = `${Math.max(1, Math.floor(capped * scale * 0.98))}px`;
         } else {
-          const targetSize = block.vertical ? bounds.w * scale : bounds.h * scale;
-          textBox.style.fontSize = `${targetSize * 0.95}px`;
+          const tSize = block.vertical ? bounds.w * scale : bounds.h * scale;
+          textBox.style.fontSize = `${tSize * 0.95}px`;
         }
 
-        // ✅ 단일 선택 모드 (나만 켜기)
         textBox.addEventListener('click', (e) => {
           e.stopPropagation();
-
-          const allSelected = document.querySelectorAll('.line-box.selected');
-          allSelected.forEach((box) => {
-            if (box !== textBox) box.classList.remove('selected');
-          });
-
-          textBox.classList.toggle('selected');
-
-          // ✅ 숨김 모드(안보임)일 때 자동 복사
+          const all = document.querySelectorAll('.line-box.selected');
+          all.forEach((b) => b.classList.remove('selected'));
+          textBox.classList.add('selected');
           if (textOpacity === 0) {
-            navigator.clipboard
-              .writeText(lineText)
-              .then(() => console.log('복사 완료:', lineText))
-              .catch((err) => console.error('복사 실패:', err));
+            navigator.clipboard.writeText(lineText);
           }
         });
-
         textBox.textContent = lineText;
-        textLayer.appendChild(textBox);
+        targetLayer.appendChild(textBox);
       });
     } else {
-      // =========================
-      // 번역 보기 파이프라인
-      // - 같은 블록의 여러 줄을 합쳐서 "통짜 문장" DOM을 만들고,
-      //   브라우저 번역(또는 향후 API 번역)에 유리하게 함
-      // =========================
-      // 1) 병합(번역 입력용)
+      // (번역) 병합 파이프라인
       let originalLines = Array.isArray(block.lines)
         ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
         : [];
-
       const mergedText = originalLines.join('');
       if (!mergedText) return;
 
       const textBox = document.createElement('div');
-      textBox.className = 'line-box';
-      textBox.classList.add('translated');
-
-      // 블록 전체 박스 기준 배치
+      textBox.className = 'line-box translated';
       textBox.style.left = `${bgLeft}px`;
       textBox.style.top = `${bgTop}px`;
 
-      // ✅ 중요: 세로쓰기는 '높이'가 꽉 차야 줄바꿈(옆으로 이동)이 일어납니다.
       if (block.vertical) {
-        textBox.style.height = `${bgHeight}px`;
         textBox.style.width = `${bgWidth}px`;
+        textBox.style.height = `${bgHeight}px`;
       } else {
-        // [가로쓰기]
-        // 너비를 고정해야 글자가 옆으로 끝없이 가지 않고 다음 줄로 꺾임
         textBox.style.width = `${bgWidth}px`;
         textBox.style.height = `${bgHeight}px`;
       }
 
-      // 폰트 크기 로직 유지
       if (block.font_size) {
-        // ✅ cap은 "scale 적용 전"에 걸어야 페이지 전체 기준이 흔들리지 않음
-        const cappedRawFont = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
-
-        const scaledFontSize = cappedRawFont * scale;
-        const finalFontSize = scaledFontSize * 0.98;
-        textBox.style.fontSize = `${Math.max(1, Math.floor(finalFontSize))}px`;
+        const capped = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
+        textBox.style.fontSize = `${Math.max(1, Math.floor(capped * scale * 0.98))}px`;
       }
-      // 클릭 선택 로직 유지
+
       textBox.addEventListener('click', (e) => {
         e.stopPropagation();
-        const allSelected = document.querySelectorAll('.line-box.selected');
-        allSelected.forEach((box) => {
-          if (box !== textBox) box.classList.remove('selected');
-        });
-        textBox.classList.toggle('selected');
+        const all = document.querySelectorAll('.line-box.selected');
+        all.forEach((b) => b.classList.remove('selected'));
+        textBox.classList.add('selected');
       });
-
       textBox.textContent = mergedText;
-
-      textLayer.appendChild(textBox);
+      targetLayer.appendChild(textBox);
     }
   });
+}
 
-  // 5. 투명도 적용
+// 텍스트박스 렌더링
+// 텍스트박스 렌더링 (라인 단위 + 2 Layer 방식)
+function renderTextBoxes(isTextHidden) {
+  // 1. 단일 모드일 때만 overlayContainer 초기화 (웹툰모드는 건드리면 안됨)
+  if (isWebtoonMode) {
+    // 웹툰 모드일 땐, 전체 이미지를 돌면서 다시 그려줘야 함 (리사이즈/투명도 변경 대응)
+    // viewerContainer 안의 모든 .webtoon-wrapper를 찾아서 처리
+    const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+    wrappers.forEach((wrapper, idx) => {
+      const img = wrapper.querySelector('img');
+      const overlay = wrapper.querySelector('.webtoon-overlay');
+      if (img && overlay) {
+        overlay.innerHTML = ''; // 초기화
+        // 레이어 생성 (배경용) - 기존 구조와 맞추려면 여기서도 bg-layer 생성해야 하지만
+        // 간단하게 overlay에 바로 그려도 됨.
+        // (위 drawPageText는 layer 하나에 다 때려박는 구조이므로 바로 전달)
+        drawPageText(idx, img, overlay);
+      }
+    });
+    // 투명도 적용
+    applyTextOpacity();
+    return;
+  }
+
+  // [단일 모드 로직]
+  overlayContainer.innerHTML = ''; // 초기화
+  if (isTextHidden) return;
+
+  // 레이어 구조 생성 (단일 모드는 bg-layer, text-layer가 분리되어 있었음)
+  // drawPageText를 그대로 쓰려면, text-layer 하나만 넘겨도 됩니다.
+  // 다만 배경(회색박스)이 bg-layer에 들어가야 글자 아래 깔리므로,
+  // drawPageText를 조금 더 정교하게 만들거나, 그냥 text-layer 하나에 다 넣어도 z-index 순서(appendChild 순서) 때문에 작동합니다.
+
+  // 간단하게 하나의 컨테이너로 합쳐서 호출
+  const unifiedLayer = document.createElement('div');
+  unifiedLayer.style.position = 'absolute';
+  unifiedLayer.style.top = '0';
+  unifiedLayer.style.left = '0';
+  unifiedLayer.style.width = '100%';
+  unifiedLayer.style.height = '100%';
+  overlayContainer.appendChild(unifiedLayer);
+
+  drawPageText(currentIndex, singleImg, unifiedLayer);
+
   applyTextOpacity();
 }
 
