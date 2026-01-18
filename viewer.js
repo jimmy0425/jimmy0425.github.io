@@ -344,9 +344,16 @@ function renderTextBoxes(isTextHidden) {
     const rawWidth = bMaxX - bMinX;
     const rawHeight = bMaxY - bMinY;
 
-    // 2. 3%에 해당하는 여백을 계산합니다. (0.05 = 5%)
-    const padX = rawWidth * 0.07;
-    const padY = rawHeight * 0.05;
+    // 2. 여백을 계산합니다. (0.05 = 5%)
+    let padX = 0;
+    const padY = rawHeight * 0.03;
+
+    // 라인이 2개 or 3개인 경우 → 좌우 너비 20%
+    if (block.lines.length === 2 || block.lines.length === 3) {
+      padX = rawWidth * 0.25;
+    } else {
+      padX = rawWidth * 0.1;
+    }
 
     // 상하좌우로 padding만큼 넓힘 (이미지 밖으로 나가지 않게 clamp 적용)
     const bx1 = clamp(bMinX - padX, 0, singleImg.naturalWidth);
@@ -458,10 +465,10 @@ function renderTextBoxes(isTextHidden) {
       //   브라우저 번역(또는 향후 API 번역)에 유리하게 함
       // =========================
       // 1) 병합(번역 입력용)
-      const originalLines = Array.isArray(block.lines)
+      let originalLines = Array.isArray(block.lines)
         ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
         : [];
-      const mergedText = originalLines.join('');
+      const mergedText = block.vertical ? originalLines.join('') : originalLines.join('\n');
       if (!mergedText) return;
 
       const textBox = document.createElement('div');
@@ -479,7 +486,7 @@ function renderTextBoxes(isTextHidden) {
       } else {
         // [가로쓰기]
         // 너비를 고정해야 글자가 옆으로 끝없이 가지 않고 다음 줄로 꺾임
-        textBox.style.width = `${bgWidth * 1.1}px`;
+        textBox.style.width = `${bgWidth}px`;
         textBox.style.height = `${bgHeight}px`;
       }
 
@@ -500,7 +507,6 @@ function renderTextBoxes(isTextHidden) {
         textBox.classList.toggle('selected');
       });
 
-      // ✅ 핵심: 줄바꿈 가공 없이 그대로!
       textBox.textContent = mergedText;
 
       textLayer.appendChild(textBox);
