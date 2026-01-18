@@ -96,7 +96,7 @@ img,
 .line-box {
   position: absolute;
   display: flex;
-  align-items: center;      
+  align-items: stretch;      
   justify-content: center;   
   box-sizing: border-box;
   overflow: visible;
@@ -115,7 +115,8 @@ img,
    ========================================= */
 .line-box.translated {
   white-space: pre-line !important;
-  word-break: break-all !important; /*이건 절대 바꾸면 안됨*/
+  /* word-break: break-all !important;*/ /*이건 금칙 처리(줄 첫 글자 금지)때메 문제발생*/
+   line-break: anywhere; /*이건 절대 바꾸면 안됨*/
   line-height: 1.0 !important;  
 
   /*번역시 여러개의 <font>가 들어가면서 <font>들이 좌우 정렬이 되는것을 방지*/

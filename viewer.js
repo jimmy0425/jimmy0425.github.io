@@ -474,7 +474,8 @@ function renderTextBoxes(isTextHidden) {
       let originalLines = Array.isArray(block.lines)
         ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
         : [];
-      const mergedText = block.vertical ? originalLines.join('') : originalLines.join('\n');
+
+      const mergedText = originalLines.join('');
       if (!mergedText) return;
 
       const textBox = document.createElement('div');
