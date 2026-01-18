@@ -100,14 +100,17 @@ function applyStyles(img) {
 
 // 모든 이미지에 스타일 재적용 + 텍스트박스
 function updateAllStyles() {
+  // 1. 이미지 스타일(크기 등) 적용
   viewerContainer.querySelectorAll('img').forEach((img) => {
     if (img.complete) applyStyles(img);
     else img.onload = () => applyStyles(img);
   });
-  if (!isWebtoonMode) {
-    renderTextBoxes(isTextHidden);
-  }
-  // ✅ 추가: 스타일 갱신 후에도 투명도 재적용
+
+  // 2. ✅ 수정됨: 모드 상관없이 텍스트 박스 렌더링 함수 호출
+  // (renderTextBoxes 안에서 모드별로 알아서 처리하도록 맡김)
+  renderTextBoxes(isTextHidden);
+
+  // 3. 투명도 적용
   applyTextOpacity();
 }
 
@@ -472,39 +475,42 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 }
 
 // 텍스트박스 렌더링
-// 텍스트박스 렌더링 (라인 단위 + 2 Layer 방식)
 function renderTextBoxes(isTextHidden) {
-  // 1. 단일 모드일 때만 overlayContainer 초기화 (웹툰모드는 건드리면 안됨)
+  // =========================================
+  // [Case A] 웹툰 모드
+  // =========================================
   if (isWebtoonMode) {
-    // 웹툰 모드일 땐, 전체 이미지를 돌면서 다시 그려줘야 함 (리사이즈/투명도 변경 대응)
-    // viewerContainer 안의 모든 .webtoon-wrapper를 찾아서 처리
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+
     wrappers.forEach((wrapper, idx) => {
       const img = wrapper.querySelector('img');
       const overlay = wrapper.querySelector('.webtoon-overlay');
+
       if (img && overlay) {
-        overlay.innerHTML = ''; // 초기화
-        // 레이어 생성 (배경용) - 기존 구조와 맞추려면 여기서도 bg-layer 생성해야 하지만
-        // 간단하게 overlay에 바로 그려도 됨.
-        // (위 drawPageText는 layer 하나에 다 때려박는 구조이므로 바로 전달)
-        drawPageText(idx, img, overlay);
+        // 1. 일단 무조건 비웁니다 (제거 버튼 눌렀을 때를 위해)
+        overlay.innerHTML = '';
+
+        // 2. '생성' 상태일 때만 다시 그립니다
+        if (!isTextHidden) {
+          drawPageText(idx, img, overlay);
+        }
       }
     });
-    // 투명도 적용
+
+    // 3. 투명도 및 숨김 클래스 재적용
     applyTextOpacity();
     return;
   }
 
-  // [단일 모드 로직]
+  // =========================================
+  // [Case B] 단일 이미지 모드
+  // =========================================
   overlayContainer.innerHTML = ''; // 초기화
+
+  // 제거 상태면 여기서 끝
   if (isTextHidden) return;
 
-  // 레이어 구조 생성 (단일 모드는 bg-layer, text-layer가 분리되어 있었음)
-  // drawPageText를 그대로 쓰려면, text-layer 하나만 넘겨도 됩니다.
-  // 다만 배경(회색박스)이 bg-layer에 들어가야 글자 아래 깔리므로,
-  // drawPageText를 조금 더 정교하게 만들거나, 그냥 text-layer 하나에 다 넣어도 z-index 순서(appendChild 순서) 때문에 작동합니다.
-
-  // 간단하게 하나의 컨테이너로 합쳐서 호출
+  // 단일 모드용 통합 레이어 생성
   const unifiedLayer = document.createElement('div');
   unifiedLayer.style.position = 'absolute';
   unifiedLayer.style.top = '0';
@@ -513,8 +519,10 @@ function renderTextBoxes(isTextHidden) {
   unifiedLayer.style.height = '100%';
   overlayContainer.appendChild(unifiedLayer);
 
+  // 그리기
   drawPageText(currentIndex, singleImg, unifiedLayer);
 
+  // 투명도 적용
   applyTextOpacity();
 }
 
