@@ -612,19 +612,28 @@ zipInput.addEventListener('change', async (e) => {
     }
   });
 
-  // 3) Blob → File 객체 변환하여 files에 저장
+  // 3) Blob → File 객체 변환
   const imageFiles = await Promise.all(
     imgEntries.map((entry) => entry.async('blob').then((blob) => new File([blob], entry.name, { type: blob.type }))),
   );
   files = imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-  // 4) 기존 로직 재사용
+  // 4) 렌더링 및 초기화
   [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
     (btn) => (btn.disabled = false),
   );
   currentIndex = 0;
   resetZoom();
   render();
+
+  // ✅ [추가] ZIP 로딩 완료 후 자동으로 UI 숨기기 (몰입 모드)
+  // 왼쪽 컨트롤 패널 숨기기
+  const controls = document.querySelector('.controls');
+  if (controls) controls.classList.add('hidden');
+
+  // 오른쪽 메뉴 리스트 숨기기
+  const menuList = document.getElementById('menu-list');
+  if (menuList) menuList.classList.add('hidden-menu');
 });
 
 const hideButton = document.getElementById('toggle-controls-btn');
@@ -753,3 +762,38 @@ document.body.addEventListener('click', (e) => {
     selection.removeAllRanges(); // 현재 잡혀있는 모든 드래그 영역을 제거
   }
 });
+
+// [viewer.js 추가] 우측 상단 메뉴 토글 기능
+// [viewer.js] 맨 아래 교체: UI 전체 토글 (Master UI Toggle)
+const menuToggleBtn = document.getElementById('menu-toggle-btn');
+const menuList = document.getElementById('menu-list');
+const uicontrols = document.querySelector('.controls'); // 왼쪽 컨트롤 패널
+
+// 1. '≡' 버튼 클릭 이벤트 (마스터 스위치)
+// - 이 버튼을 누를 때만 메뉴와 왼쪽 컨트롤바가 열리거나 닫힙니다.
+menuToggleBtn.addEventListener('click', () => {
+  // 메뉴 리스트의 숨김 클래스(.hidden-menu)를 토글
+  // (toggle은 클래스가 추가되면 true(숨김), 제거되면 false(보임)를 반환)
+  const isMenuHidden = menuList.classList.toggle('hidden-menu');
+
+  // 메뉴 상태에 맞춰 왼쪽 컨트롤 패널도 강제로 동기화
+  if (isMenuHidden) {
+    // 메뉴가 닫히면 -> 컨트롤도 숨김
+    uicontrols.classList.add('hidden');
+  } else {
+    // 메뉴가 열리면 -> 컨트롤도 보임
+    uicontrols.classList.remove('hidden');
+  }
+});
+
+// ✅ 수정됨: 메뉴 내부 버튼('컨트롤', '텍스트', '보임')에는
+// '메뉴를 닫는 기능'을 추가하지 않았습니다.
+// 따라서 해당 버튼들을 눌러 기능을 실행해도 메뉴창은 계속 열려 있습니다.
+
+// (옵션) 메뉴 내부 버튼을 눌렀을 때도 메뉴와 컨트롤을 닫고 싶다면 아래 주석을 해제하세요.
+// menuList.querySelectorAll('button').forEach((btn) => {
+//   btn.addEventListener('click', () => {
+//     menuList.classList.add('hidden-menu');
+//     uicontrols.classList.add('hidden');
+//   });
+// });

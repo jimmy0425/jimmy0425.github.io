@@ -45,11 +45,15 @@
     <button id="zoom-in" disabled>+</button>
   </div>
 
-  <!-- 우측 숨기기 버튼 생성-->
-  <button id="toggle-controls-btn">컨</button>
-  <button id="toggle-text-btn">생성</button>
-  <!-- ✅ 추가: 텍스트 박스 투명도 버튼 -->
-  <button id="opacity-btn">보임</button>
+  <div id="floating-menu">
+  <button id="menu-toggle-btn">≡</button>
+  
+  <div id="menu-list" class="hidden-menu">
+    <button id="toggle-controls-btn">컨트롤</button>
+    <button id="toggle-text-btn">생성</button>
+    <button id="opacity-btn">보이기</button>
+  </div>
+</div>
   
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.7.1/jszip.min.js"></script>
