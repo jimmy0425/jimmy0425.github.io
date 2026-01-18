@@ -117,7 +117,9 @@ img,
   white-space: pre-line !important;
   word-break: break-all !important; /*이건 절대 바꾸면 안됨*/
   line-height: 1.0 !important;  
-  
+
+  /*번역시 여러개의 <font>가 들어가면서 <font>들이 좌우 정렬이 되는것을 방지*/
+  flex-direction: column;  
 }
 
 .line-box.vertical {
