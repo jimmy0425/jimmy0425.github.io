@@ -47,6 +47,13 @@ img,
   margin: 0;
   padding: 0;
   overflow: hidden;
+
+  /* ✅ [추가] 세로 중앙 정렬을 위한 Flex 설정 */
+  display: flex;
+  flex-direction: column;  /* 요소들을 세로로 배치 (웹툰 모드 호환) */
+  justify-content: center; /* 세로축 중앙 정렬 (가로형 이미지가 화면 중앙에 오게 함) */
+  align-items: center;     /* 가로축 중앙 정렬 */
+  min-height: 100vh;       /* 컨테이너 최소 높이를 화면 전체로 잡아야 중앙 정렬 가능 */
 }
 
 #viewer,

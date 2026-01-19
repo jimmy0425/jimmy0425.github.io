@@ -89,8 +89,19 @@ function applyStyles(img) {
     img.style.width = 'auto';
     img.style.height = `${zoomFactor * 100}vh`;
   } else if (displayMode === 'default') {
-    img.style.width = `${zoomFactor * 80}%`;
-    img.style.height = 'auto';
+    // ✅ [수정] 이미지 비율에 따른 자동 맞춤 로직
+    // naturalHeight(세로)가 naturalWidth(가로)보다 크면 -> 세로형
+    const isPortrait = img.naturalHeight > img.naturalWidth;
+
+    if (isPortrait) {
+      // 세로가 긴 경우: Fit to Screen (화면 높이에 맞춤)
+      img.style.width = 'auto';
+      img.style.height = `${zoomFactor * 100}vh`;
+    } else {
+      // 가로가 긴 경우: Fit to Width (화면 너비에 맞춤)
+      img.style.width = `${zoomFactor * 100}%`;
+      img.style.height = 'auto';
+    }
   } else {
     const w = img.naturalWidth * zoomFactor;
     img.style.width = `${w}px`;
@@ -279,6 +290,17 @@ viewerContainer.addEventListener('wheel', (e) => {
 
 // 키보드 줌
 window.addEventListener('keydown', (e) => {
+  // ✅ [추가] 스페이스바: '보임/안보임' 버튼 토글
+  if (e.code === 'Space' || e.key === ' ') {
+    // 입력창(페이지 이동 input 등)에 포커스가 있을 때는 동작하지 않도록 예외 처리
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+      return;
+    }
+    e.preventDefault(); // 스페이스바 누를 때 스크롤 내려가는 기본 동작 방지
+    btnOpacity.click(); // '보임/안보임' 버튼 강제 클릭
+    return;
+  }
+
   if (e.key === '+' || e.key === '=') {
     zoomFactor *= 1.1;
     updateAllStyles();
