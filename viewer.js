@@ -32,8 +32,8 @@ function mergeBlockLines(block) {
 
 // 페이지 이동용으로 추가
 const pageInfo = document.getElementById('page-info');
-const pageInput = document.getElementById('page-input');
-const goPageBtn = document.getElementById('go-page-btn');
+// [추가] 새로운 select 요소 가져오기
+const pageSelect = document.getElementById('page-select');
 
 singleImg.addEventListener('load', () => {
   // 이미지가 화면에 완전히 렌더링된 뒤 텍스트박스 그리기
@@ -180,12 +180,15 @@ function render() {
   btnNext.style.display = isWebtoonMode ? 'none' : '';
 
   // 페이지 정보 업데이트
+  // (기존) 페이지 정보 업데이트
   if (files.length > 0) {
     pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
-    pageInput.value = currentIndex + 1;
+
+    // [수정] 입력창 값 변경 대신 select 값 변경
+    pageSelect.value = currentIndex;
   } else {
     pageInfo.textContent = '0 / 0';
-    pageInput.value = '';
+    // pageInput.value = ''; (삭제)
   }
 }
 
@@ -227,6 +230,10 @@ fileInput.addEventListener('change', () => {
   [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
     (btn) => (btn.disabled = false),
   );
+
+  //[추가] 렌더링 직전에 목록 생성 호출
+  updatePageOptions();
+
   resetZoom();
   currentIndex = 0;
   render();
@@ -644,6 +651,8 @@ zipInput.addEventListener('change', async (e) => {
   [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
     (btn) => (btn.disabled = false),
   );
+  // [추가] 렌더링 직전에 목록 생성 호출
+  updatePageOptions();
   currentIndex = 0;
   resetZoom();
   render();
@@ -758,16 +767,6 @@ function jumpToPage() {
   }
 }
 
-// ✅ 추가: 이벤트 리스너 등록
-goPageBtn.addEventListener('click', jumpToPage);
-
-// 엔터키 입력 시에도 이동하도록 설정
-pageInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    jumpToPage();
-  }
-});
-
 // ✅ 추가: 빈 공간(바탕화면, 이미지 배경 등) 클릭 시 선택 초기화
 document.body.addEventListener('click', (e) => {
   // 현재 선택된(.selected) 모든 박스를 찾아서
@@ -808,14 +807,49 @@ menuToggleBtn.addEventListener('click', () => {
   }
 });
 
-// ✅ 수정됨: 메뉴 내부 버튼('컨트롤', '텍스트', '보임')에는
-// '메뉴를 닫는 기능'을 추가하지 않았습니다.
-// 따라서 해당 버튼들을 눌러 기능을 실행해도 메뉴창은 계속 열려 있습니다.
+// [추가] 페이지 선택 목록(Option)을 갱신하는 함수
+function updatePageOptions() {
+  pageSelect.innerHTML = ''; // 기존 목록 초기화
 
-// (옵션) 메뉴 내부 버튼을 눌렀을 때도 메뉴와 컨트롤을 닫고 싶다면 아래 주석을 해제하세요.
-// menuList.querySelectorAll('button').forEach((btn) => {
-//   btn.addEventListener('click', () => {
-//     menuList.classList.add('hidden-menu');
-//     uicontrols.classList.add('hidden');
-//   });
-// });
+  if (files.length === 0) {
+    const opt = document.createElement('option');
+    opt.text = '파일 없음';
+    pageSelect.appendChild(opt);
+    return;
+  }
+
+  files.forEach((file, index) => {
+    const opt = document.createElement('option');
+    opt.value = index; // 값은 0부터 시작하는 인덱스
+    opt.text = `${index + 1} 페이지`; // 보여지는 텍스트는 1부터
+    pageSelect.appendChild(opt);
+  });
+}
+
+// [추가] 드롭다운 변경 시 해당 페이지로 이동
+pageSelect.addEventListener('change', (e) => {
+  const selectedIndex = parseInt(e.target.value, 10);
+
+  // 유효한 숫자인지 확인
+  if (!isNaN(selectedIndex) && selectedIndex >= 0 && selectedIndex < files.length) {
+    currentIndex = selectedIndex;
+
+    if (isWebtoonMode) {
+      // 웹툰 모드면 해당 이미지로 스크롤
+      const images = viewerContainer.querySelectorAll('img');
+      if (images[currentIndex]) {
+        images[currentIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
+      }
+      // 드롭다운 값 동기화를 위해 render는 호출하지 않아도 되지만,
+      // pageInfo 텍스트 갱신 등을 위해 필요하다면 부분 업데이트 필요.
+      // 여기서는 간단히 pageInfo만 갱신하거나 둡니다.
+      pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
+    } else {
+      // 단일 모드면 다시 그리기
+      render();
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }
+});
+
+// (참고) 기존 goPageBtn.addEventListener... 및 pageInput 엔터키 이벤트는 삭제하거나 주석 처리하세요.
