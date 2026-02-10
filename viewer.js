@@ -852,4 +852,13 @@ pageSelect.addEventListener('change', (e) => {
   }
 });
 
-// (참고) 기존 goPageBtn.addEventListener... 및 pageInput 엔터키 이벤트는 삭제하거나 주석 처리하세요.
+// =========================================
+// [추가] 모바일 더블 탭 확대 방지 (강제 차단)
+// =========================================
+document.addEventListener(
+  'dblclick',
+  function (event) {
+    event.preventDefault(); // 더블 클릭 시 브라우저의 기본 동작(확대)을 막음
+  },
+  { passive: false },
+);
