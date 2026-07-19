@@ -27,7 +27,9 @@ const btnOpacity = document.getElementById('opacity-btn');
 // - '.'/ '．'가 2개 이상 연속되면 1개로 줄여 OCR의 과도한 점(.)을 완화
 function mergeBlockLines(block) {
   if (!block || !Array.isArray(block.lines)) return '';
-  return block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.')).join('');
+  return block.lines
+    .map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
+    .join('');
 }
 
 // 페이지 이동용으로 추가
@@ -129,7 +131,9 @@ function updateAllStyles() {
 function render() {
   viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
   // ✅ 웹툰 모드 래퍼들도 싹 지워야 함 (기존 코드는 img만 지웠음)
-  viewerContainer.querySelectorAll('.webtoon-wrapper').forEach((n) => n.remove());
+  viewerContainer
+    .querySelectorAll('.webtoon-wrapper')
+    .forEach((n) => n.remove());
 
   if (isWebtoonMode) {
     // [웹툰 모드]
@@ -222,14 +226,28 @@ fileInput.addEventListener('change', () => {
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   if (!files.length) {
     alert('이미지 파일이 없습니다.');
-    [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-      (btn) => (btn.disabled = true),
-    );
+    [
+      toggleBtn,
+      btnPrev,
+      btnNext,
+      btnFitWidth,
+      btnFitScreen,
+      btnOriginal,
+      btnZoomOut,
+      btnZoomIn,
+    ].forEach((btn) => (btn.disabled = true));
     return;
   }
-  [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false),
-  );
+  [
+    toggleBtn,
+    btnPrev,
+    btnNext,
+    btnFitWidth,
+    btnFitScreen,
+    btnOriginal,
+    btnZoomOut,
+    btnZoomIn,
+  ].forEach((btn) => (btn.disabled = false));
 
   //[추가] 렌더링 직전에 목록 생성 호출
   updatePageOptions();
@@ -300,7 +318,10 @@ window.addEventListener('keydown', (e) => {
   // ✅ [추가] 스페이스바: '보임/안보임' 버튼 토글
   if (e.code === 'Space' || e.key === ' ') {
     // 입력창(페이지 이동 input 등)에 포커스가 있을 때는 동작하지 않도록 예외 처리
-    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+    if (
+      document.activeElement.tagName === 'INPUT' ||
+      document.activeElement.tagName === 'TEXTAREA'
+    ) {
       return;
     }
     e.preventDefault(); // 스페이스바 누를 때 스크롤 내려가는 기본 동작 방지
@@ -399,25 +420,31 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 
     const rawWidth = bMaxX - bMinX;
     const rawHeight = bMaxY - bMinY;
-    let padX = block.lines.length === 2 || block.lines.length === 3 ? rawWidth * 0.25 : rawWidth * 0.1;
-    const padY = rawHeight * 0.03;
 
-    const bx1 = clamp(bMinX - padX, 0, imgEl.naturalWidth);
-    const by1 = clamp(bMinY - padY, 0, imgEl.naturalHeight);
-    const bx2 = clamp(bMaxX + padX, 0, imgEl.naturalWidth);
-    const by2 = clamp(bMaxY + padY, 0, imgEl.naturalHeight);
+    // ✅ 기존 padX, padY 뻥튀기 로직 제거 완료
+    // 여백 없이 순수 바운딩 박스 크기만 사용
+    const bx1 = clamp(bMinX, 0, imgEl.naturalWidth);
+    const by1 = clamp(bMinY, 0, imgEl.naturalHeight);
+    const bx2 = clamp(bMaxX, 0, imgEl.naturalWidth);
+    const by2 = clamp(bMaxY, 0, imgEl.naturalHeight);
 
     const bgLeft = offsetX + bx1 * scale;
     const bgTop = offsetY + by1 * scale;
+
+    // 이제 bgWidth와 bgHeight는 여백이 포함되지 않은 순수 텍스트 영역의 크기가 됨
     const bgWidth = (bx2 - bx1) * scale;
     const bgHeight = (by2 - by1) * scale;
+
+    // ✅ [수정] 박스 좌우 넓이를 10% 넓히고, 원래 중심을 유지하기 위해 좌측 시작점(Left)을 당겨줌 (유지)
+    const expandedWidth = bgWidth * 1.1;
+    const expandedLeft = bgLeft - bgWidth * 0.05;
 
     // [STEP B] 배경 박스
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';
-    bgBox.style.left = `${bgLeft}px`;
+    bgBox.style.left = `${expandedLeft}px`;
     bgBox.style.top = `${bgTop}px`;
-    bgBox.style.width = `${bgWidth}px`;
+    bgBox.style.width = `${expandedWidth}px`;
     bgBox.style.height = `${bgHeight}px`;
     targetLayer.appendChild(bgBox);
 
@@ -425,7 +452,7 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
     const isTranslatedView = textOpacity === 1;
 
     if (!isTranslatedView) {
-      // (기존) 원문 파이프라인
+      // (기존) 원문 파이프라인 (생략...)
       block.lines.forEach((rawLineText, index) => {
         const lineText = String(rawLineText ?? '').replace(/[．.]{2,}/g, '.');
         const coords = correctedCoords[index];
@@ -444,9 +471,10 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
         textBox.style.minWidth = `${lWidth}px`;
         textBox.style.minHeight = `${lHeight}px`;
 
-        // 폰트 크기
         if (block.font_size) {
-          const capped = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
+          const capped = fontSizeCap
+            ? Math.min(block.font_size, fontSizeCap)
+            : block.font_size;
           textBox.style.fontSize = `${Math.max(1, Math.floor(capped * scale * 0.98))}px`;
         } else {
           const tSize = block.vertical ? bounds.w * scale : bounds.h * scale;
@@ -470,26 +498,31 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
       let originalLines = Array.isArray(block.lines)
         ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
         : [];
-      const mergedText = originalLines.join('');
+
+      const mergedText = originalLines.join('').replace(/\n/g, '');
       if (!mergedText) return;
 
       const textBox = document.createElement('div');
       textBox.className = 'line-box translated';
-      textBox.style.left = `${bgLeft}px`;
+
+      textBox.style.left = `${expandedLeft}px`;
       textBox.style.top = `${bgTop}px`;
+      textBox.style.width = `${expandedWidth}px`;
+      textBox.style.height = `${bgHeight}px`;
 
-      if (block.vertical) {
-        textBox.style.width = `${bgWidth}px`;
-        textBox.style.height = `${bgHeight}px`;
-      } else {
-        textBox.style.width = `${bgWidth}px`;
-        textBox.style.height = `${bgHeight}px`;
+      textBox.style.padding = '0';
+      textBox.style.lineHeight = '1.0';
+      textBox.style.wordBreak = 'break-all';
+
+      // ✅ [수정] 면적 기반 폰트 크기 계산 (이제 bgWidth가 순수 글자 영역이므로 바로 사용)
+      const textLen = mergedText.length;
+      let computedFontSize = 1;
+
+      if (textLen > 0) {
+        computedFontSize = Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9;
       }
 
-      if (block.font_size) {
-        const capped = fontSizeCap ? Math.min(block.font_size, fontSizeCap) : block.font_size;
-        textBox.style.fontSize = `${Math.max(1, Math.floor(capped * scale * 0.98))}px`;
-      }
+      textBox.style.fontSize = `${computedFontSize}px`;
 
       textBox.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -643,14 +676,27 @@ zipInput.addEventListener('change', async (e) => {
 
   // 3) Blob → File 객체 변환
   const imageFiles = await Promise.all(
-    imgEntries.map((entry) => entry.async('blob').then((blob) => new File([blob], entry.name, { type: blob.type }))),
+    imgEntries.map((entry) =>
+      entry
+        .async('blob')
+        .then((blob) => new File([blob], entry.name, { type: blob.type })),
+    ),
   );
-  files = imageFiles.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  files = imageFiles.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
 
   // 4) 렌더링 및 초기화
-  [toggleBtn, btnPrev, btnNext, btnFitWidth, btnFitScreen, btnOriginal, btnZoomOut, btnZoomIn].forEach(
-    (btn) => (btn.disabled = false),
-  );
+  [
+    toggleBtn,
+    btnPrev,
+    btnNext,
+    btnFitWidth,
+    btnFitScreen,
+    btnOriginal,
+    btnZoomOut,
+    btnZoomIn,
+  ].forEach((btn) => (btn.disabled = false));
   // [추가] 렌더링 직전에 목록 생성 호출
   updatePageOptions();
   currentIndex = 0;
@@ -831,14 +877,21 @@ pageSelect.addEventListener('change', (e) => {
   const selectedIndex = parseInt(e.target.value, 10);
 
   // 유효한 숫자인지 확인
-  if (!isNaN(selectedIndex) && selectedIndex >= 0 && selectedIndex < files.length) {
+  if (
+    !isNaN(selectedIndex) &&
+    selectedIndex >= 0 &&
+    selectedIndex < files.length
+  ) {
     currentIndex = selectedIndex;
 
     if (isWebtoonMode) {
       // 웹툰 모드면 해당 이미지로 스크롤
       const images = viewerContainer.querySelectorAll('img');
       if (images[currentIndex]) {
-        images[currentIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
+        images[currentIndex].scrollIntoView({
+          behavior: 'auto',
+          block: 'start',
+        });
       }
       // 드롭다운 값 동기화를 위해 render는 호출하지 않아도 되지만,
       // pageInfo 텍스트 갱신 등을 위해 필요하다면 부분 업데이트 필요.
