@@ -472,12 +472,13 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
 
     const textBox = document.createElement('div');
     textBox.className = 'line-box';
+
     if (textOpacity === 1) {
       textBox.classList.add('translated');
     }
 
-    // 💡 [수정된 부분] 세로쓰기일 경우, Flexbox 환경에서 줄바꿈이 무시되는 브라우저 이슈 방지
-    if (block.label === 'vertical_text') {
+    // 💡 [수정된 부분] 안보임 모드(textOpacity === 0)이면서 vertical_text일 때만 세로쓰기 적용
+    if (textOpacity === 0 && block.label === 'vertical_text') {
       textBox.classList.add('vertical');
       textBox.style.display = 'block'; // 강제로 블록 요소로 변경하여 줄바꿈 유도
     }
@@ -489,7 +490,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     textBox.style.padding = '0';
     textBox.style.lineHeight = '1.0';
 
-    // 💡 [수정된 부분] 박스 영역을 벗어나면 무조건 강제로 줄바꿈되도록 속성 세팅
     textBox.style.whiteSpace = 'pre-wrap';
     textBox.style.wordBreak = 'break-all';
     textBox.style.lineBreak = 'anywhere';
