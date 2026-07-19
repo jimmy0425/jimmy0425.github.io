@@ -424,6 +424,7 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 }
 
 // Paddle 방식 텍스트 그리기 로직
+// Paddle 방식 텍스트 그리기 로직
 function drawPaddleText(pageIndex, imgEl, targetLayer) {
   const file = files[pageIndex];
   if (!file || imgEl.naturalWidth === 0) return;
@@ -471,7 +472,15 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
 
     const textBox = document.createElement('div');
     textBox.className = 'line-box';
-    if (textOpacity === 1) textBox.classList.add('translated');
+    if (textOpacity === 1) {
+      textBox.classList.add('translated');
+    }
+
+    // 💡 [수정된 부분] 세로쓰기일 경우, Flexbox 환경에서 줄바꿈이 무시되는 브라우저 이슈 방지
+    if (block.label === 'vertical_text') {
+      textBox.classList.add('vertical');
+      textBox.style.display = 'block'; // 강제로 블록 요소로 변경하여 줄바꿈 유도
+    }
 
     textBox.style.left = `${expandedLeft}px`;
     textBox.style.top = `${bgTop}px`;
@@ -480,13 +489,17 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     textBox.style.padding = '0';
     textBox.style.lineHeight = '1.0';
 
+    // 💡 [수정된 부분] 박스 영역을 벗어나면 무조건 강제로 줄바꿈되도록 속성 세팅
+    textBox.style.whiteSpace = 'pre-wrap';
+    textBox.style.wordBreak = 'break-all';
+    textBox.style.lineBreak = 'anywhere';
+
     const sanitizedContent = block.content.replace(/\n/g, '');
     const textLen = sanitizedContent.length;
     let computedFontSize =
       textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
 
     textBox.style.fontSize = `${computedFontSize}px`;
-    textBox.style.wordBreak = 'break-all';
 
     textBox.addEventListener('click', (e) => {
       e.stopPropagation();
