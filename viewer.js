@@ -16,71 +16,45 @@ const overlayContainer = document.getElementById('overlay-container');
 const singleImg = document.getElementById('viewer');
 const clickLeft = document.getElementById('click-left');
 const clickRight = document.getElementById('click-right');
-
 const zipInput = document.getElementById('zip-input');
 const pickZipBtn = document.getElementById('pick-zip');
-
-// ✅ 추가: 투명도 버튼 참조
 const btnOpacity = document.getElementById('opacity-btn');
-
-// ✅ 번역 보기용: 블록 내 여러 줄을 하나로 합치기 (줄바꿈 제거)
-// - '.'/ '．'가 2개 이상 연속되면 1개로 줄여 OCR의 과도한 점(.)을 완화
-function mergeBlockLines(block) {
-  if (!block || !Array.isArray(block.lines)) return '';
-  return block.lines
-    .map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
-    .join('');
-}
-
-// 페이지 이동용으로 추가
 const pageInfo = document.getElementById('page-info');
-// [추가] 새로운 select 요소 가져오기
 const pageSelect = document.getElementById('page-select');
 
+// 상태 변수
+let files = [];
+let currentIndex = 0;
+let isWebtoonMode = false;
+let displayMode = 'default';
+let zoomFactor = 1;
+let textOpacity = 1.0;
+let isTextHidden = false;
+
+// 데이터 통합 저장소
+let dataType = 'none'; // 'paddle' 또는 'mokuro'
+let ocrDataMap = {};
+let mokuroData = null;
+
 singleImg.addEventListener('load', () => {
-  // 이미지가 화면에 완전히 렌더링된 뒤 텍스트박스 그리기
   renderTextBoxes(isTextHidden);
 });
 
-// ✅ 추가: 텍스트 박스 투명도 상태
-let textOpacity = 1.0; // 1.0=100%, 0.0=0%
-
-// [수정된 투명도 적용 함수]
 function applyTextOpacity() {
-  // 1. 단일 모드 오버레이
   const singleContainer = document.getElementById('overlay-container');
-  // 2. 웹툰 모드 오버레이들 (현재 렌더링된 모든 것)
   const webtoonContainers = document.querySelectorAll('.webtoon-overlay');
-
   const isHidden = textOpacity === 0;
 
-  // 헬퍼 함수: 요소에 hide-mode 클래스 토글
   const toggleClass = (el) => {
     if (!el) return;
-    if (isHidden) {
-      el.classList.add('hide-mode');
-    } else {
-      el.classList.remove('hide-mode');
-    }
+    if (isHidden) el.classList.add('hide-mode');
+    else el.classList.remove('hide-mode');
   };
 
-  // 단일 모드 적용
   toggleClass(singleContainer);
-
-  // 웹툰 모드 적용 (모든 이미지에 대해 반복)
   webtoonContainers.forEach((el) => toggleClass(el));
 }
 
-// 상태 변수
-let files = []; //이미지 파일들
-let currentIndex = 0;
-let isWebtoonMode = false;
-//let displayMode = 'fit-screen';
-let displayMode = 'default';
-let zoomFactor = 1;
-let mokuroData = null;
-
-// 스타일 적용
 function applyStyles(img) {
   img.style.display = 'block';
   img.style.margin = '0 auto';
@@ -91,16 +65,11 @@ function applyStyles(img) {
     img.style.width = 'auto';
     img.style.height = `${zoomFactor * 100}vh`;
   } else if (displayMode === 'default') {
-    // ✅ [수정] 이미지 비율에 따른 자동 맞춤 로직
-    // naturalHeight(세로)가 naturalWidth(가로)보다 크면 -> 세로형
     const isPortrait = img.naturalHeight > img.naturalWidth;
-
     if (isPortrait) {
-      // 세로가 긴 경우: Fit to Screen (화면 높이에 맞춤)
       img.style.width = 'auto';
       img.style.height = `${zoomFactor * 100}vh`;
     } else {
-      // 가로가 긴 경우: Fit to Width (화면 너비에 맞춤)
       img.style.width = `${zoomFactor * 100}%`;
       img.style.height = 'auto';
     }
@@ -111,92 +80,63 @@ function applyStyles(img) {
   }
 }
 
-// 모든 이미지에 스타일 재적용 + 텍스트박스
 function updateAllStyles() {
-  // 1. 이미지 스타일(크기 등) 적용
   viewerContainer.querySelectorAll('img').forEach((img) => {
     if (img.complete) applyStyles(img);
     else img.onload = () => applyStyles(img);
   });
-
-  // 2. ✅ 수정됨: 모드 상관없이 텍스트 박스 렌더링 함수 호출
-  // (renderTextBoxes 안에서 모드별로 알아서 처리하도록 맡김)
   renderTextBoxes(isTextHidden);
-
-  // 3. 투명도 적용
   applyTextOpacity();
 }
 
-// 렌더링
 function render() {
   viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
-  // ✅ 웹툰 모드 래퍼들도 싹 지워야 함 (기존 코드는 img만 지웠음)
   viewerContainer
     .querySelectorAll('.webtoon-wrapper')
     .forEach((n) => n.remove());
 
   if (isWebtoonMode) {
-    // [웹툰 모드]
-    overlayContainer.innerHTML = ''; // 단일 모드용 오버레이 초기화
-
+    overlayContainer.innerHTML = '';
     files.forEach((file, idx) => {
-      // 1. 래퍼(Wrapper) 생성
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
 
-      // 2. 이미지 생성
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.className = 'webtoon-img';
 
-      // 3. 개별 오버레이 생성
       const localOverlay = document.createElement('div');
       localOverlay.className = 'webtoon-overlay';
 
-      // 4. 구조 조립: Wrapper > [Img, Overlay]
       wrapper.appendChild(img);
       wrapper.appendChild(localOverlay);
       viewerContainer.appendChild(wrapper);
 
-      // 5. 로드 완료 후 스타일 및 텍스트 렌더링
       img.onload = () => {
         applyStyles(img);
-
-        // ★ 핵심: 이 이미지(idx)에 해당하는 텍스트 박스를 localOverlay에 그리기
-        // (아래에서 만들 drawPageText 함수 호출)
         drawPageText(idx, img, localOverlay);
-
-        // ✅ [추가] 텍스트를 그린 직후, 현재 투명도 설정(hide-mode)을 즉시 적용
         applyTextOpacity();
       };
     });
   } else {
-    // [단일 이미지 모드] (기존 로직 유지)
     singleImg.onload = () => {
-      updateAllStyles(); // 내부에서 renderTextBoxes 호출함
+      updateAllStyles();
     };
     singleImg.src = URL.createObjectURL(files[currentIndex]);
     viewerContainer.appendChild(singleImg);
   }
 
-  // 버튼 상태 갱신
   btnPrev.style.display = isWebtoonMode ? 'none' : '';
   btnNext.style.display = isWebtoonMode ? 'none' : '';
 
-  // 페이지 정보 업데이트
-  // (기존) 페이지 정보 업데이트
   if (files.length > 0) {
     pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
-
-    // [수정] 입력창 값 변경 대신 select 값 변경
     pageSelect.value = currentIndex;
   } else {
     pageInfo.textContent = '0 / 0';
-    // pageInput.value = ''; (삭제)
   }
 }
 
-// 이미지 이동 함수
 function prevImage() {
   if (!isWebtoonMode && files.length) {
     currentIndex = (currentIndex - 1 + files.length) % files.length;
@@ -212,32 +152,137 @@ function nextImage() {
   }
 }
 
-// 초기 줌 리셋
 function resetZoom() {
   zoomFactor = 1;
 }
 
-// 파일 입력 (폴더)
+// 확장자명 기반 통합 파싱 함수
+function processParsedData(parsed, fileName = '') {
+  const ext = fileName.split('.').pop().toLowerCase();
+
+  if (ext === 'mokuro') {
+    mokuroData = parsed;
+    dataType = 'mokuro';
+  } else if (ext === 'paddle' || ext === 'json') {
+    if (Array.isArray(parsed)) {
+      const baseName =
+        fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+      ocrDataMap[baseName] = parsed;
+    } else {
+      Object.assign(ocrDataMap, parsed);
+    }
+    dataType = 'paddle';
+  }
+}
+
+// 1. 폴더 및 파일 읽기
 pickBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', () => {
+fileInput.addEventListener('change', async () => {
   const allFiles = Array.from(fileInput.files);
   files = allFiles
     .filter((f) => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name))
     .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
   if (!files.length) {
     alert('이미지 파일이 없습니다.');
-    [
-      toggleBtn,
-      btnPrev,
-      btnNext,
-      btnFitWidth,
-      btnFitScreen,
-      btnOriginal,
-      btnZoomOut,
-      btnZoomIn,
-    ].forEach((btn) => (btn.disabled = true));
     return;
   }
+
+  const dataFiles = allFiles.filter((f) =>
+    /\.(json|mokuro|paddle)$/i.test(f.name),
+  );
+  ocrDataMap = {};
+  mokuroData = null;
+
+  for (const file of dataFiles) {
+    const text = await file.text();
+    try {
+      const parsed = JSON.parse(text);
+      processParsedData(parsed, file.name);
+    } catch (e) {
+      console.error('Data parsing error', e);
+    }
+  }
+
+  enableControls();
+  updatePageOptions();
+  resetZoom();
+  currentIndex = 0;
+  render();
+});
+
+// 2. 단일 데이터 파일 읽기 (.json, .mokuro, .paddle)
+loadJsonBtn.addEventListener('click', () => jsonInput.click());
+jsonInput.addEventListener('change', () => {
+  const file = jsonInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      processParsedData(parsed, file.name);
+      render();
+    } catch (e) {
+      console.error('Invalid Data file:', e);
+    }
+  };
+  reader.readAsText(file);
+});
+
+// 3. ZIP 파일 처리
+pickZipBtn.addEventListener('click', () => zipInput.click());
+zipInput.addEventListener('change', async (e) => {
+  const zipFile = e.target.files[0];
+  if (!zipFile) return;
+
+  const zip = await JSZip.loadAsync(zipFile);
+  const imgEntries = [];
+  ocrDataMap = {};
+  mokuroData = null;
+  const dataPromises = [];
+
+  zip.forEach((_, entry) => {
+    if (/\.(jpe?g|png|gif|bmp|webp)$/i.test(entry.name)) {
+      imgEntries.push(entry);
+    } else if (/\.(json|mokuro|paddle)$/i.test(entry.name)) {
+      dataPromises.push(
+        entry.async('string').then((txt) => {
+          try {
+            const parsed = JSON.parse(txt);
+            const fileName = entry.name.split('/').pop();
+            processParsedData(parsed, fileName);
+          } catch (e) {}
+        }),
+      );
+    }
+  });
+
+  await Promise.all(dataPromises);
+
+  const imageFiles = await Promise.all(
+    imgEntries.map((entry) =>
+      entry
+        .async('blob')
+        .then((blob) => new File([blob], entry.name, { type: blob.type })),
+    ),
+  );
+  files = imageFiles.sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true }),
+  );
+
+  enableControls();
+  updatePageOptions();
+  currentIndex = 0;
+  resetZoom();
+  render();
+
+  const controls = document.querySelector('.controls');
+  if (controls) controls.classList.add('hidden');
+  const menuList = document.getElementById('menu-list');
+  if (menuList) menuList.classList.add('hidden-menu');
+});
+
+function enableControls() {
   [
     toggleBtn,
     btnPrev,
@@ -248,23 +293,15 @@ fileInput.addEventListener('change', () => {
     btnZoomOut,
     btnZoomIn,
   ].forEach((btn) => (btn.disabled = false));
+}
 
-  //[추가] 렌더링 직전에 목록 생성 호출
-  updatePageOptions();
-
-  resetZoom();
-  currentIndex = 0;
-  render();
-});
-
-// 웹툰 모드 토글
+// UI 컨트롤 이벤트
 toggleBtn.addEventListener('click', () => {
   isWebtoonMode = !isWebtoonMode;
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
   render();
 });
 
-// 버튼 이벤트 연결
 btnPrev.addEventListener('click', prevImage);
 btnNext.addEventListener('click', nextImage);
 btnFitWidth.addEventListener('click', () => {
@@ -290,9 +327,7 @@ btnZoomOut.addEventListener('click', () => {
   zoomFactor *= 0.9;
   updateAllStyles();
 });
-loadJsonBtn.addEventListener('click', () => jsonInput.click());
 
-// 클릭 영역 핸들링
 clickLeft.addEventListener('click', (e) => {
   e.stopPropagation();
   nextImage();
@@ -304,7 +339,6 @@ clickRight.addEventListener('click', (e) => {
   updateAllStyles();
 });
 
-// Shift + 마우스 휠로 줌
 viewerContainer.addEventListener('wheel', (e) => {
   if (!e.shiftKey) return;
   e.preventDefault();
@@ -313,98 +347,184 @@ viewerContainer.addEventListener('wheel', (e) => {
   updateAllStyles();
 });
 
-// 키보드 줌
 window.addEventListener('keydown', (e) => {
-  // ✅ [추가] 스페이스바: '보임/안보임' 버튼 토글
   if (e.code === 'Space' || e.key === ' ') {
-    // 입력창(페이지 이동 input 등)에 포커스가 있을 때는 동작하지 않도록 예외 처리
     if (
       document.activeElement.tagName === 'INPUT' ||
       document.activeElement.tagName === 'TEXTAREA'
-    ) {
+    )
       return;
-    }
-    e.preventDefault(); // 스페이스바 누를 때 스크롤 내려가는 기본 동작 방지
-    btnOpacity.click(); // '보임/안보임' 버튼 강제 클릭
+    e.preventDefault();
+    btnOpacity.click();
     return;
   }
-
   if (e.key === '+' || e.key === '=') {
     zoomFactor *= 1.1;
     updateAllStyles();
   } else if (e.key === '-') {
     zoomFactor *= 0.9;
     updateAllStyles();
-  } else if (e.key === 'ArrowLeft') {
-    // ✅ 왼쪽 화살표: 다음 페이지 (Manga Style)
-    nextImage();
-  } else if (e.key === 'ArrowRight') {
-    // ✅ 오른쪽 화살표: 이전 페이지 (Manga Style)
-    prevImage();
-  }
+  } else if (e.key === 'ArrowLeft') nextImage();
+  else if (e.key === 'ArrowRight') prevImage();
 });
 
-// Mokuro 파일 입력 및 JSON 파싱
-jsonInput.addEventListener('change', () => {
-  const file = jsonInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      mokuroData = JSON.parse(reader.result);
-      console.log('Mokuro JSON data PARSED!:', mokuroData);
-      render();
-    } catch (e) {
-      console.error('Invalid JSON in Mokuro file:', e);
-    }
-  };
-  reader.readAsText(file);
-});
-
-//value가 min~max 벗어나면 min|max값이 되게끔.
+// 공용 Helper 함수
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
+function mergeBlockLines(block) {
+  if (!block || !Array.isArray(block.lines)) return '';
+  return block.lines
+    .map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
+    .join('');
+}
+function getPolygonBounds(coords) {
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  coords.forEach(([x, y]) => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
+  });
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+function fixVerticalLineCoords(block) {
+  const coords = JSON.parse(JSON.stringify(block.lines_coords));
+  if (!block.vertical || coords.length < 2) return coords;
+  const minYs = coords.map((line) => Math.min(...line.map((p) => p[1])));
+  const blockTop = Math.min(...minYs);
+  const TOLERANCE = 30;
+  return coords.map((line, i) => {
+    const currentMinY = minYs[i];
+    if (Math.abs(currentMinY - blockTop) < TOLERANCE) {
+      const diff = currentMinY - blockTop;
+      return line.map(([x, y]) => [x, y - diff]);
+    }
+    return line;
+  });
+}
+function calculateDynamicFontSizeCap(blocks) {
+  const fontSizes = blocks.map((block) => block.font_size);
+  const sortedSizes = [...fontSizes].sort((a, b) => a - b);
+  let median =
+    sortedSizes.length % 2 === 0
+      ? sortedSizes[sortedSizes.length / 2 - 1]
+      : sortedSizes[Math.floor(sortedSizes.length / 2)];
+  return Math.max(median * 1.2, 10);
+}
 
-/**
- * 특정 페이지(pageIndex)의 텍스트 블록을
- * 특정 이미지(imgEl) 기준으로 계산하여
- * 특정 레이어(targetLayer)에 그리는 함수
- */
+// 통합 렌더링 라우터
 function drawPageText(pageIndex, imgEl, targetLayer) {
-  // 1. 예외 처리
   if (isTextHidden) return;
-  if (!mokuroData || !mokuroData.pages) return;
-  const page = mokuroData.pages[pageIndex];
-  if (!page || !page.blocks || page.blocks.length === 0) return;
-  if (imgEl.naturalWidth === 0) return;
+  if (dataType === 'paddle') drawPaddleText(pageIndex, imgEl, targetLayer);
+  else if (dataType === 'mokuro') drawMokuroText(pageIndex, imgEl, targetLayer);
+}
 
-  // 2. 좌표 계산 준비
-  // 웹툰 모드는 Wrapper(relative) 기준이므로 offset이 0일 수 있음.
-  // 하지만 img가 Wrapper 내에서 margin: auto 등으로 이동했다면 계산 필요.
-  // 가장 확실한 방법: img의 좌표 - targetLayer(부모)의 좌표
+// Paddle 방식 텍스트 그리기 로직
+function drawPaddleText(pageIndex, imgEl, targetLayer) {
+  const file = files[pageIndex];
+  if (!file || imgEl.naturalWidth === 0) return;
 
-  // (단, .webtoon-wrapper > .webtoon-overlay 구조에서는 둘 다 (0,0) 시작이므로 offset=0 가정 가능)
-  // (단일 모드는 viewerContainer 기준이므로 기존 로직 필요)
+  const fileName = file.name;
+  const baseName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+  let pageData =
+    ocrDataMap[fileName] ||
+    ocrDataMap[baseName] ||
+    ocrDataMap[baseName + '_simple'] ||
+    ocrDataMap['single_file_fallback'];
 
-  // 여기서는 범용성을 위해 getBoundingClientRect 차이를 구함
+  if (!pageData || !Array.isArray(pageData) || pageData.length === 0) return;
+
   const imgRect = imgEl.getBoundingClientRect();
-  const layerRect = targetLayer.getBoundingClientRect(); // 부모 혹은 자신
-
-  // 오버레이가 이미지와 완전히 겹쳐 있다고 가정할 때의 오프셋
+  const layerRect = targetLayer.getBoundingClientRect();
   const offsetX = imgRect.left - layerRect.left;
   const offsetY = imgRect.top - layerRect.top;
+  const scale = imgEl.clientWidth / imgEl.naturalWidth;
 
+  pageData.forEach((block) => {
+    if (block.label === 'image' || !block.content) return;
+
+    const [xmin, ymin, xmax, ymax] = block.bbox;
+    const bx1 = Math.max(xmin, 0);
+    const by1 = Math.max(ymin, 0);
+    const bx2 = Math.min(xmax, imgEl.naturalWidth);
+    const by2 = Math.min(ymax, imgEl.naturalHeight);
+
+    const bgLeft = offsetX + bx1 * scale;
+    const bgTop = offsetY + by1 * scale;
+    const bgWidth = (bx2 - bx1) * scale;
+    const bgHeight = (by2 - by1) * scale;
+
+    const expandedWidth = bgWidth * 1.1;
+    const expandedLeft = bgLeft - bgWidth * 0.05;
+
+    const bgBox = document.createElement('div');
+    bgBox.className = 'bg-box';
+    bgBox.style.left = `${expandedLeft}px`;
+    bgBox.style.top = `${bgTop}px`;
+    bgBox.style.width = `${expandedWidth}px`;
+    bgBox.style.height = `${bgHeight}px`;
+    targetLayer.appendChild(bgBox);
+
+    const textBox = document.createElement('div');
+    textBox.className = 'line-box';
+    if (textOpacity === 1) textBox.classList.add('translated');
+
+    textBox.style.left = `${expandedLeft}px`;
+    textBox.style.top = `${bgTop}px`;
+    textBox.style.width = `${expandedWidth}px`;
+    textBox.style.height = `${bgHeight}px`;
+    textBox.style.padding = '0';
+    textBox.style.lineHeight = '1.0';
+
+    const sanitizedContent = block.content.replace(/\n/g, '');
+    const textLen = sanitizedContent.length;
+    let computedFontSize =
+      textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
+
+    textBox.style.fontSize = `${computedFontSize}px`;
+    textBox.style.wordBreak = 'break-all';
+
+    textBox.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document
+        .querySelectorAll('.line-box.selected')
+        .forEach((b) => b.classList.remove('selected'));
+      textBox.classList.add('selected');
+      if (textOpacity === 0) navigator.clipboard.writeText(sanitizedContent);
+    });
+
+    textBox.textContent = sanitizedContent;
+    targetLayer.appendChild(textBox);
+  });
+}
+
+// Mokuro 방식 텍스트 그리기 로직
+function drawMokuroText(pageIndex, imgEl, targetLayer) {
+  if (!mokuroData || !mokuroData.pages) return;
+  const page = mokuroData.pages[pageIndex];
+  if (
+    !page ||
+    !page.blocks ||
+    page.blocks.length === 0 ||
+    imgEl.naturalWidth === 0
+  )
+    return;
+
+  const imgRect = imgEl.getBoundingClientRect();
+  const layerRect = targetLayer.getBoundingClientRect();
+  const offsetX = imgRect.left - layerRect.left;
+  const offsetY = imgRect.top - layerRect.top;
   const scale = imgEl.clientWidth / imgEl.naturalWidth;
   const fontSizeCap = calculateDynamicFontSizeCap(page.blocks);
 
-  // 3. 블록 순회 및 생성 (기존 로직 재사용)
   page.blocks.forEach((block) => {
     if (!block.lines || !block.lines_coords) return;
-
     const correctedCoords = fixVerticalLineCoords(block);
 
-    // [STEP A] 통합 바운딩 박스 계산
     let bMinX = Infinity,
       bMinY = Infinity,
       bMaxX = -Infinity,
@@ -418,11 +538,6 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
       });
     });
 
-    const rawWidth = bMaxX - bMinX;
-    const rawHeight = bMaxY - bMinY;
-
-    // ✅ 기존 padX, padY 뻥튀기 로직 제거 완료
-    // 여백 없이 순수 바운딩 박스 크기만 사용
     const bx1 = clamp(bMinX, 0, imgEl.naturalWidth);
     const by1 = clamp(bMinY, 0, imgEl.naturalHeight);
     const bx2 = clamp(bMaxX, 0, imgEl.naturalWidth);
@@ -430,16 +545,12 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 
     const bgLeft = offsetX + bx1 * scale;
     const bgTop = offsetY + by1 * scale;
-
-    // 이제 bgWidth와 bgHeight는 여백이 포함되지 않은 순수 텍스트 영역의 크기가 됨
     const bgWidth = (bx2 - bx1) * scale;
     const bgHeight = (by2 - by1) * scale;
 
-    // ✅ [수정] 박스 좌우 넓이를 10% 넓히고, 원래 중심을 유지하기 위해 좌측 시작점(Left)을 당겨줌 (유지)
     const expandedWidth = bgWidth * 1.1;
     const expandedLeft = bgLeft - bgWidth * 0.05;
 
-    // [STEP B] 배경 박스
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';
     bgBox.style.left = `${expandedLeft}px`;
@@ -448,11 +559,9 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
     bgBox.style.height = `${bgHeight}px`;
     targetLayer.appendChild(bgBox);
 
-    // [STEP C] 텍스트 박스 (보임/안보임 분기)
     const isTranslatedView = textOpacity === 1;
 
     if (!isTranslatedView) {
-      // (기존) 원문 파이프라인 (생략...)
       block.lines.forEach((rawLineText, index) => {
         const lineText = String(rawLineText ?? '').replace(/[．.]{2,}/g, '.');
         const coords = correctedCoords[index];
@@ -483,51 +592,42 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 
         textBox.addEventListener('click', (e) => {
           e.stopPropagation();
-          const all = document.querySelectorAll('.line-box.selected');
-          all.forEach((b) => b.classList.remove('selected'));
+          document
+            .querySelectorAll('.line-box.selected')
+            .forEach((b) => b.classList.remove('selected'));
           textBox.classList.add('selected');
-          if (textOpacity === 0) {
-            navigator.clipboard.writeText(lineText);
-          }
+          if (textOpacity === 0) navigator.clipboard.writeText(lineText);
         });
         textBox.textContent = lineText;
         targetLayer.appendChild(textBox);
       });
     } else {
-      // (번역) 병합 파이프라인
       let originalLines = Array.isArray(block.lines)
         ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
         : [];
-
       const mergedText = originalLines.join('').replace(/\n/g, '');
       if (!mergedText) return;
 
       const textBox = document.createElement('div');
       textBox.className = 'line-box translated';
-
       textBox.style.left = `${expandedLeft}px`;
       textBox.style.top = `${bgTop}px`;
       textBox.style.width = `${expandedWidth}px`;
       textBox.style.height = `${bgHeight}px`;
-
       textBox.style.padding = '0';
       textBox.style.lineHeight = '1.0';
       textBox.style.wordBreak = 'break-all';
 
-      // ✅ [수정] 면적 기반 폰트 크기 계산 (이제 bgWidth가 순수 글자 영역이므로 바로 사용)
       const textLen = mergedText.length;
-      let computedFontSize = 1;
-
-      if (textLen > 0) {
-        computedFontSize = Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9;
-      }
-
+      let computedFontSize =
+        textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
       textBox.style.fontSize = `${computedFontSize}px`;
 
       textBox.addEventListener('click', (e) => {
         e.stopPropagation();
-        const all = document.querySelectorAll('.line-box.selected');
-        all.forEach((b) => b.classList.remove('selected'));
+        document
+          .querySelectorAll('.line-box.selected')
+          .forEach((b) => b.classList.remove('selected'));
         textBox.classList.add('selected');
       });
       textBox.textContent = mergedText;
@@ -536,43 +636,23 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
   });
 }
 
-// 텍스트박스 렌더링
 function renderTextBoxes(isTextHidden) {
-  // =========================================
-  // [Case A] 웹툰 모드
-  // =========================================
   if (isWebtoonMode) {
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
-
     wrappers.forEach((wrapper, idx) => {
       const img = wrapper.querySelector('img');
       const overlay = wrapper.querySelector('.webtoon-overlay');
-
       if (img && overlay) {
-        // 1. 일단 무조건 비웁니다 (제거 버튼 눌렀을 때를 위해)
         overlay.innerHTML = '';
-
-        // 2. '생성' 상태일 때만 다시 그립니다
-        if (!isTextHidden) {
-          drawPageText(idx, img, overlay);
-        }
+        if (!isTextHidden) drawPageText(idx, img, overlay);
       }
     });
-
-    // 3. 투명도 및 숨김 클래스 재적용
     applyTextOpacity();
     return;
   }
-
-  // =========================================
-  // [Case B] 단일 이미지 모드
-  // =========================================
-  overlayContainer.innerHTML = ''; // 초기화
-
-  // 제거 상태면 여기서 끝
+  overlayContainer.innerHTML = '';
   if (isTextHidden) return;
 
-  // 단일 모드용 통합 레이어 생성
   const unifiedLayer = document.createElement('div');
   unifiedLayer.style.position = 'absolute';
   unifiedLayer.style.top = '0';
@@ -581,137 +661,9 @@ function renderTextBoxes(isTextHidden) {
   unifiedLayer.style.height = '100%';
   overlayContainer.appendChild(unifiedLayer);
 
-  // 그리기
   drawPageText(currentIndex, singleImg, unifiedLayer);
-
-  // 투명도 적용
   applyTextOpacity();
 }
-
-/**
- * 다각형 좌표([[x,y],...])를 받아 사각형 바운딩 박스(x, y, w, h)를 반환
- */
-function getPolygonBounds(coords) {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  coords.forEach(([x, y]) => {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  });
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
-
-/**
- * 세로쓰기일 경우, 라인들의 시작점(Y)을 블록 내에서 통일감 있게 보정하는 함수
- * (삐뚤빼뚤한 시작점을 가장 위쪽 라인 기준으로 맞춤)
- */
-function fixVerticalLineCoords(block) {
-  // 깊은 복사로 원본 데이터 보호
-  const coords = JSON.parse(JSON.stringify(block.lines_coords));
-
-  if (!block.vertical || coords.length < 2) {
-    return coords;
-  }
-
-  // 1. 모든 라인의 minY(시작 높이)를 수집
-  const minYs = coords.map((line) => Math.min(...line.map((p) => p[1])));
-
-  // 2. 블록 전체의 '기준 Top' 찾기 (가장 위에 있는 라인의 Y값)
-  const blockTop = Math.min(...minYs);
-
-  // 3. 보정 허용 오차 (픽셀 단위, 예: 30px 이내 차이는 같은 줄로 간주)
-  const TOLERANCE = 30;
-
-  // 4. 좌표 보정
-  return coords.map((line, i) => {
-    const currentMinY = minYs[i];
-
-    // 이 라인이 기준점(blockTop)과 가깝다면 (오차 범위 내)
-    if (Math.abs(currentMinY - blockTop) < TOLERANCE) {
-      // Y좌표 이동량 계산 (위로 끌어올림)
-      const diff = currentMinY - blockTop;
-      // 라인의 모든 점의 Y좌표를 diff만큼 뺌
-      return line.map(([x, y]) => [x, y - diff]);
-    }
-    return line;
-  });
-}
-
-//json 구조 :
-// pages[0], pages[1], pages[2]
-// img_path : 이미지파일 이름
-// img_width :
-// img_height :
-// blocks[0], [1], ...[9] : 9개의 말풍선이 있다
-// box [0],,[4] : 말풍선의 4개의 꼭지점 좌표?
-// font_size : 이미지의 크기에 맞는 OCR이 제공한 폰트크기
-// lines : [0], ,,[4] : 이게 text
-// lines_coords: [0], [1], [2], [3] : 말풍선안에 4개의 줄이 있고 각각의 줄에 text가 있는 형태
-
-// ZIP 선택
-pickZipBtn.addEventListener('click', () => zipInput.click());
-// ZIP 파일 입력 처리 (최소한 변경)
-zipInput.addEventListener('change', async (e) => {
-  const zipFile = e.target.files[0];
-  if (!zipFile) return;
-
-  // 1) ZIP 로드
-  const zip = await JSZip.loadAsync(zipFile);
-  const imgEntries = [];
-
-  // 2) 이미지와 .mokuro 분류
-  zip.forEach((_, entry) => {
-    if (/\.(jpe?g|png|gif|bmp|webp)$/i.test(entry.name)) {
-      imgEntries.push(entry);
-    } else if (/\.mokuro$/i.test(entry.name)) {
-      entry.async('string').then((txt) => {
-        mokuroData = JSON.parse(txt);
-      });
-    }
-  });
-
-  // 3) Blob → File 객체 변환
-  const imageFiles = await Promise.all(
-    imgEntries.map((entry) =>
-      entry
-        .async('blob')
-        .then((blob) => new File([blob], entry.name, { type: blob.type })),
-    ),
-  );
-  files = imageFiles.sort((a, b) =>
-    a.name.localeCompare(b.name, undefined, { numeric: true }),
-  );
-
-  // 4) 렌더링 및 초기화
-  [
-    toggleBtn,
-    btnPrev,
-    btnNext,
-    btnFitWidth,
-    btnFitScreen,
-    btnOriginal,
-    btnZoomOut,
-    btnZoomIn,
-  ].forEach((btn) => (btn.disabled = false));
-  // [추가] 렌더링 직전에 목록 생성 호출
-  updatePageOptions();
-  currentIndex = 0;
-  resetZoom();
-  render();
-
-  // ✅ [추가] ZIP 로딩 완료 후 자동으로 UI 숨기기 (몰입 모드)
-  // 왼쪽 컨트롤 패널 숨기기
-  const controls = document.querySelector('.controls');
-  if (controls) controls.classList.add('hidden');
-
-  // 오른쪽 메뉴 리스트 숨기기
-  const menuList = document.getElementById('menu-list');
-  if (menuList) menuList.classList.add('hidden-menu');
-});
 
 const hideButton = document.getElementById('toggle-controls-btn');
 const controls = document.querySelector('.controls');
@@ -719,199 +671,85 @@ let isHidden = false;
 hideButton.addEventListener('click', () => {
   isHidden = !isHidden;
   controls.classList.toggle('hidden', isHidden);
-  hideButton.textContent = isHidden ? '컨' : '컨';
 });
 
 const hideTextButton = document.getElementById('toggle-text-btn');
-let isTextHidden = false;
 hideTextButton.addEventListener('click', () => {
   isTextHidden = !isTextHidden;
   updateAllStyles();
   hideTextButton.textContent = isTextHidden ? '제거' : '생성';
-  console.log(isTextHidden);
 });
 
-// ✅ 추가: 투명도 버튼 동작 (순환)
 btnOpacity.addEventListener('click', () => {
-  // 1. 다음 단계로 순환
   const steps = [1.0, 0.0];
   const idx = steps.indexOf(textOpacity);
   textOpacity = steps[(idx + 1) % steps.length];
-
-  // 2. 즉시 반영
   applyTextOpacity();
-
-  // 3. 라벨 갱신 (투명도)
-  if (textOpacity == 0) {
-    btnOpacity.textContent = `안보임`;
-  } else {
-    btnOpacity.textContent = `보임`;
-  }
-
-  // ✅ 모드(원문/번역 보기)가 바뀌었으므로 오버레이를 다시 생성해야 함
-  // - 안보임: 라인 단위
-  // - 보임: 블록 단위(줄 병합)
+  btnOpacity.textContent = textOpacity === 0 ? '안보임' : '보임';
   renderTextBoxes(isTextHidden);
 });
 
-/**
- * 페이지의 텍스트 블록 목록을 기반으로 동적 폰트 크기 상한선을 계산합니다.
- * OCR 오류로 인한 비정상적인 폰트 크기를 보정하는 데 사용됩니다.
- * @param {Array} blocks 현재 페이지의 모든 블록 객체 배열
- * @returns {number} 이 페이지에 적용할 최대 폰트 크기
- */
-function calculateDynamicFontSizeCap(blocks) {
-  // 1. 모든 폰트 사이즈를 배열로 추출
-  const fontSizes = blocks.map((block) => block.font_size);
-
-  const sortedSizes = [...fontSizes].sort((a, b) => a - b);
-  let median;
-
-  if (sortedSizes.length % 2 === 0) {
-    // 짝수면 lower median
-    median = sortedSizes[sortedSizes.length / 2 - 1];
-  } else {
-    median = sortedSizes[Math.floor(sortedSizes.length / 2)];
-  }
-
-  // 4. 중앙값의 1.2배를 최대 허용치로 설정. 이 배수는 조절 가능합니다.
-  const OUTLIER_MULTIPLIER = 1.2;
-  const cap = median * OUTLIER_MULTIPLIER;
-
-  // 5. 최소 캡 값을 보장 (예: 기본 폰트 크기가 매우 작은 경우를 대비)
-  const MINIMUM_CAP = 10;
-
-  return Math.max(cap, MINIMUM_CAP);
-}
-
-// ✅ 추가: 특정 페이지로 점프하는 함수
-function jumpToPage() {
-  if (!files.length) return;
-
-  // 입력값 가져오기 (문자열 -> 정수 변환)
-  let page = parseInt(pageInput.value);
-
-  // 유효성 검사 (숫자인지, 범위 내인지)
-  if (isNaN(page) || page < 1 || page > files.length) {
-    alert(`1부터 ${files.length} 사이의 페이지를 입력하세요.`);
-    return;
-  }
-
-  // 배열 인덱스는 0부터 시작하므로 -1
-  currentIndex = page - 1;
-
-  if (isWebtoonMode) {
-    // 웹툰 모드일 경우 해당 이미지 위치로 스크롤 이동
-    const images = viewerContainer.querySelectorAll('img');
-    if (images[currentIndex]) {
-      images[currentIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
-    }
-  } else {
-    // 단일 모드일 경우 화면 다시 그리기
-    render();
-    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-  }
-}
-
-// ✅ 추가: 빈 공간(바탕화면, 이미지 배경 등) 클릭 시 선택 초기화
-document.body.addEventListener('click', (e) => {
-  // 현재 선택된(.selected) 모든 박스를 찾아서
-  const selectedBoxes = document.querySelectorAll('.line-box.selected');
-
-  // 하나씩 순회하며 선택 해제 (초기화)
-  selectedBoxes.forEach((box) => {
-    box.classList.remove('selected');
-  });
-
-  // 2. [추가] 드래그로 긁은 텍스트(시스템 하이라이트) 해제
+document.body.addEventListener('click', () => {
+  document
+    .querySelectorAll('.line-box.selected')
+    .forEach((box) => box.classList.remove('selected'));
   const selection = window.getSelection();
-  if (selection) {
-    selection.removeAllRanges(); // 현재 잡혀있는 모든 드래그 영역을 제거
-  }
+  if (selection) selection.removeAllRanges();
 });
 
-// [viewer.js 추가] 우측 상단 메뉴 토글 기능
-// [viewer.js] 맨 아래 교체: UI 전체 토글 (Master UI Toggle)
 const menuToggleBtn = document.getElementById('menu-toggle-btn');
 const menuList = document.getElementById('menu-list');
-const uicontrols = document.querySelector('.controls'); // 왼쪽 컨트롤 패널
+const uicontrols = document.querySelector('.controls');
 
-// 1. '≡' 버튼 클릭 이벤트 (마스터 스위치)
-// - 이 버튼을 누를 때만 메뉴와 왼쪽 컨트롤바가 열리거나 닫힙니다.
 menuToggleBtn.addEventListener('click', () => {
-  // 메뉴 리스트의 숨김 클래스(.hidden-menu)를 토글
-  // (toggle은 클래스가 추가되면 true(숨김), 제거되면 false(보임)를 반환)
   const isMenuHidden = menuList.classList.toggle('hidden-menu');
-
-  // 메뉴 상태에 맞춰 왼쪽 컨트롤 패널도 강제로 동기화
-  if (isMenuHidden) {
-    // 메뉴가 닫히면 -> 컨트롤도 숨김
-    uicontrols.classList.add('hidden');
-  } else {
-    // 메뉴가 열리면 -> 컨트롤도 보임
-    uicontrols.classList.remove('hidden');
-  }
+  if (isMenuHidden) uicontrols.classList.add('hidden');
+  else uicontrols.classList.remove('hidden');
 });
 
-// [추가] 페이지 선택 목록(Option)을 갱신하는 함수
 function updatePageOptions() {
-  pageSelect.innerHTML = ''; // 기존 목록 초기화
-
+  pageSelect.innerHTML = '';
   if (files.length === 0) {
     const opt = document.createElement('option');
     opt.text = '파일 없음';
     pageSelect.appendChild(opt);
     return;
   }
-
   files.forEach((file, index) => {
     const opt = document.createElement('option');
-    opt.value = index; // 값은 0부터 시작하는 인덱스
-    opt.text = `${index + 1} 페이지`; // 보여지는 텍스트는 1부터
+    opt.value = index;
+    opt.text = `${index + 1} 페이지`;
     pageSelect.appendChild(opt);
   });
 }
 
-// [추가] 드롭다운 변경 시 해당 페이지로 이동
 pageSelect.addEventListener('change', (e) => {
   const selectedIndex = parseInt(e.target.value, 10);
-
-  // 유효한 숫자인지 확인
   if (
     !isNaN(selectedIndex) &&
     selectedIndex >= 0 &&
     selectedIndex < files.length
   ) {
     currentIndex = selectedIndex;
-
     if (isWebtoonMode) {
-      // 웹툰 모드면 해당 이미지로 스크롤
       const images = viewerContainer.querySelectorAll('img');
-      if (images[currentIndex]) {
+      if (images[currentIndex])
         images[currentIndex].scrollIntoView({
           behavior: 'auto',
           block: 'start',
         });
-      }
-      // 드롭다운 값 동기화를 위해 render는 호출하지 않아도 되지만,
-      // pageInfo 텍스트 갱신 등을 위해 필요하다면 부분 업데이트 필요.
-      // 여기서는 간단히 pageInfo만 갱신하거나 둡니다.
       pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
     } else {
-      // 단일 모드면 다시 그리기
       render();
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }
   }
 });
 
-// =========================================
-// [추가] 모바일 더블 탭 확대 방지 (강제 차단)
-// =========================================
 document.addEventListener(
   'dblclick',
   function (event) {
-    event.preventDefault(); // 더블 클릭 시 브라우저의 기본 동작(확대)을 막음
+    event.preventDefault();
   },
   { passive: false },
 );
