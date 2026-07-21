@@ -527,8 +527,7 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
   });
 }
 
-// Mokuro 방식 텍스트 그리기 로직
-// Mokuro 방식 텍스트 그리기 로직
+// Mokuro 방식 텍스트 그리기 로직 (Paddle 방식과 동일하게 통합)
 function drawMokuroText(pageIndex, imgEl, targetLayer) {
   if (!mokuroData || !mokuroData.pages) return;
   const page = mokuroData.pages[pageIndex];
@@ -545,7 +544,6 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
   const offsetX = imgRect.left - layerRect.left;
   const offsetY = imgRect.top - layerRect.top;
   const scale = imgEl.clientWidth / imgEl.naturalWidth;
-  const fontSizeCap = calculateDynamicFontSizeCap(page.blocks);
 
   page.blocks.forEach((block) => {
     if (!block.lines || !block.lines_coords) return;
@@ -574,8 +572,14 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     const bgWidth = (bx2 - bx1) * scale;
     const bgHeight = (by2 - by1) * scale;
 
-    const expandedWidth = bgWidth * 1.1;
-    const expandedLeft = bgLeft - bgWidth * 0.05;
+    let expandedWidth = bgWidth * 1.1;
+    let expandedLeft = bgLeft - bgWidth * 0.05;
+
+    // 가로모드 또는 세로모드일 때 너비 2% 추가
+    if (textMode === '가로' || textMode === '세로') {
+      expandedWidth = bgWidth * 1.12;
+      expandedLeft = bgLeft - bgWidth * 0.06;
+    }
 
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';
@@ -585,80 +589,57 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     bgBox.style.height = `${bgHeight}px`;
     targetLayer.appendChild(bgBox);
 
-    const isTranslatedView = textMode === '가로';
+    // 여러 줄의 텍스트를 하나의 문자열로 병합
+    let originalLines = Array.isArray(block.lines)
+      ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
+      : [];
+    const sanitizedContent = originalLines.join('').replace(/\n/g, '');
+    if (!sanitizedContent) return;
 
-    if (!isTranslatedView) {
-      block.lines.forEach((rawLineText, index) => {
-        const lineText = String(rawLineText ?? '').replace(/[．.]{2,}/g, '.');
-        const coords = correctedCoords[index];
-        const bounds = getPolygonBounds(coords);
+    const textBox = document.createElement('div');
+    textBox.className = 'line-box';
 
-        const lLeft = offsetX + clamp(bounds.x, 0, imgEl.naturalWidth) * scale;
-        const lTop = offsetY + clamp(bounds.y, 0, imgEl.naturalHeight) * scale;
-        const lWidth = bounds.w * scale;
-        const lHeight = bounds.h * scale;
-
-        const textBox = document.createElement('div');
-        textBox.className = 'line-box';
-        if (block.vertical) textBox.classList.add('vertical');
-        textBox.style.left = `${lLeft}px`;
-        textBox.style.top = `${lTop}px`;
-        textBox.style.minWidth = `${lWidth}px`;
-        textBox.style.minHeight = `${lHeight}px`;
-
-        if (block.font_size) {
-          const capped = fontSizeCap
-            ? Math.min(block.font_size, fontSizeCap)
-            : block.font_size;
-          textBox.style.fontSize = `${Math.max(1, Math.floor(capped * scale * 0.98))}px`;
-        } else {
-          const tSize = block.vertical ? bounds.w * scale : bounds.h * scale;
-          textBox.style.fontSize = `${tSize * 0.95}px`;
-        }
-
-        textBox.addEventListener('click', (e) => {
-          e.stopPropagation();
-          document
-            .querySelectorAll('.line-box.selected')
-            .forEach((b) => b.classList.remove('selected'));
-          textBox.classList.add('selected');
-          if (textMode === '호버') navigator.clipboard.writeText(lineText);
-        });
-        textBox.textContent = lineText;
-        targetLayer.appendChild(textBox);
-      });
-    } else {
-      let originalLines = Array.isArray(block.lines)
-        ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
-        : [];
-      const mergedText = originalLines.join('').replace(/\n/g, '');
-      if (!mergedText) return;
-
-      const textBox = document.createElement('div');
-      textBox.className = 'line-box translated';
-      textBox.style.left = `${expandedLeft}px`;
-      textBox.style.top = `${bgTop}px`;
-      textBox.style.width = `${expandedWidth}px`;
-      textBox.style.height = `${bgHeight}px`;
-      textBox.style.padding = '0';
-      textBox.style.lineHeight = '1.0';
-      textBox.style.wordBreak = 'break-all';
-
-      const textLen = mergedText.length;
-      let computedFontSize =
-        textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
-      textBox.style.fontSize = `${computedFontSize}px`;
-
-      textBox.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document
-          .querySelectorAll('.line-box.selected')
-          .forEach((b) => b.classList.remove('selected'));
-        textBox.classList.add('selected');
-      });
-      textBox.textContent = mergedText;
-      targetLayer.appendChild(textBox);
+    if (textMode === '가로') {
+      textBox.classList.add('translated');
     }
+
+    // 세로모드이거나 호버모드이면서 vertical일 때 세로쓰기 적용
+    if ((textMode === '세로' || textMode === '호버') && block.vertical) {
+      textBox.classList.add('vertical');
+      textBox.style.display = 'block';
+    }
+
+    textBox.style.left = `${expandedLeft}px`;
+    textBox.style.top = `${bgTop}px`;
+    textBox.style.width = `${expandedWidth}px`;
+    textBox.style.height = `${bgHeight}px`;
+    textBox.style.padding = '0';
+    textBox.style.lineHeight = '1.0';
+
+    textBox.style.whiteSpace = 'pre-wrap';
+    textBox.style.wordBreak = 'break-all';
+    textBox.style.lineBreak = 'anywhere';
+
+    // Paddle 방식과 동일한 폰트 사이즈 계산 로직 적용
+    const textLen = sanitizedContent.length;
+    let computedFontSize =
+      textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
+
+    textBox.style.fontSize = `${computedFontSize}px`;
+
+    textBox.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document
+        .querySelectorAll('.line-box.selected')
+        .forEach((b) => b.classList.remove('selected'));
+      textBox.classList.add('selected');
+
+      // 호버 모드일 때 텍스트 복사
+      if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
+    });
+
+    textBox.textContent = sanitizedContent;
+    targetLayer.appendChild(textBox);
   });
 }
 
