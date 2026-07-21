@@ -28,7 +28,8 @@ let currentIndex = 0;
 let isWebtoonMode = false;
 let displayMode = 'fit-screen';
 let zoomFactor = 1;
-let textOpacity = 1.0;
+// let textOpacity = 1.0;
+let textMode = '가로'; // '가로', '세로', '호버' 3가지 상태로 관리
 let isTextHidden = false;
 
 // 데이터 통합 저장소
@@ -43,7 +44,8 @@ singleImg.addEventListener('load', () => {
 function applyTextOpacity() {
   const singleContainer = document.getElementById('overlay-container');
   const webtoonContainers = document.querySelectorAll('.webtoon-overlay');
-  const isHidden = textOpacity === 0;
+  //const isHidden = textOpacity === 0;
+  const isHidden = textMode === '호버';
 
   const toggleClass = (el) => {
     if (!el) return;
@@ -424,7 +426,6 @@ function drawPageText(pageIndex, imgEl, targetLayer) {
 }
 
 // Paddle 방식 텍스트 그리기 로직
-// Paddle 방식 텍스트 그리기 로직
 function drawPaddleText(pageIndex, imgEl, targetLayer) {
   const file = files[pageIndex];
   if (!file || imgEl.naturalWidth === 0) return;
@@ -459,8 +460,14 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     const bgWidth = (bx2 - bx1) * scale;
     const bgHeight = (by2 - by1) * scale;
 
-    const expandedWidth = bgWidth * 1.12;
-    const expandedLeft = bgLeft - bgWidth * 0.06;
+    let expandedWidth = bgWidth * 1.1;
+    let expandedLeft = bgLeft - bgWidth * 0.05;
+
+    // 가로모드 또는 세로모드일 때 너비 2% 추가
+    if (textMode === '가로' || textMode === '세로') {
+      expandedWidth = bgWidth * 1.12;
+      expandedLeft = bgLeft - bgWidth * 0.06;
+    }
 
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';
@@ -473,14 +480,17 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     const textBox = document.createElement('div');
     textBox.className = 'line-box';
 
-    if (textOpacity === 1) {
+    if (textMode === '가로') {
       textBox.classList.add('translated');
     }
 
-    // 💡 [수정된 부분] 안보임 모드(textOpacity === 0)이면서 vertical_text일 때만 세로쓰기 적용
-    if (textOpacity === 0 && block.label === 'vertical_text') {
+    // 세로모드이거나 호버모드이면서 vertical_text일 때 세로쓰기 적용
+    if (
+      (textMode === '세로' || textMode === '호버') &&
+      block.label === 'vertical_text'
+    ) {
       textBox.classList.add('vertical');
-      textBox.style.display = 'block'; // 강제로 블록 요소로 변경하여 줄바꿈 유도
+      textBox.style.display = 'block';
     }
 
     textBox.style.left = `${expandedLeft}px`;
@@ -507,7 +517,9 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
         .querySelectorAll('.line-box.selected')
         .forEach((b) => b.classList.remove('selected'));
       textBox.classList.add('selected');
-      if (textOpacity === 0) navigator.clipboard.writeText(sanitizedContent);
+
+      // 호버 모드일 때만 텍스트 복사
+      if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
     });
 
     textBox.textContent = sanitizedContent;
@@ -515,6 +527,7 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
   });
 }
 
+// Mokuro 방식 텍스트 그리기 로직
 // Mokuro 방식 텍스트 그리기 로직
 function drawMokuroText(pageIndex, imgEl, targetLayer) {
   if (!mokuroData || !mokuroData.pages) return;
@@ -572,7 +585,7 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     bgBox.style.height = `${bgHeight}px`;
     targetLayer.appendChild(bgBox);
 
-    const isTranslatedView = textOpacity === 1;
+    const isTranslatedView = textMode === '가로';
 
     if (!isTranslatedView) {
       block.lines.forEach((rawLineText, index) => {
@@ -609,7 +622,7 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
             .querySelectorAll('.line-box.selected')
             .forEach((b) => b.classList.remove('selected'));
           textBox.classList.add('selected');
-          if (textOpacity === 0) navigator.clipboard.writeText(lineText);
+          if (textMode === '호버') navigator.clipboard.writeText(lineText);
         });
         textBox.textContent = lineText;
         targetLayer.appendChild(textBox);
@@ -694,11 +707,12 @@ hideTextButton.addEventListener('click', () => {
 });
 
 btnOpacity.addEventListener('click', () => {
-  const steps = [1.0, 0.0];
-  const idx = steps.indexOf(textOpacity);
-  textOpacity = steps[(idx + 1) % steps.length];
+  const modes = ['가로', '세로', '호버'];
+  const idx = modes.indexOf(textMode);
+  textMode = modes[(idx + 1) % modes.length];
+
   applyTextOpacity();
-  btnOpacity.textContent = textOpacity === 0 ? '안보임' : '보임';
+  btnOpacity.textContent = textMode + '모드';
   renderTextBoxes(isTextHidden);
 });
 
