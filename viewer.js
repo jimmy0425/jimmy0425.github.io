@@ -459,8 +459,8 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     const bgWidth = (bx2 - bx1) * scale;
     const bgHeight = (by2 - by1) * scale;
 
-    const expandedWidth = bgWidth * 1.1;
-    const expandedLeft = bgLeft - bgWidth * 0.05;
+    const expandedWidth = bgWidth * 1.12;
+    const expandedLeft = bgLeft - bgWidth * 0.06;
 
     const bgBox = document.createElement('div');
     bgBox.className = 'bg-box';

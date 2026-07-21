@@ -9,25 +9,24 @@
   text-size-adjust: 100%;
   text-rendering: geometricPrecision;
   outline: none; /* 포커스 테두리 제거 */
-  
+
   /* ✅ [추가] 더블 탭 확대 방지 및 터치 반응 속도 향상 */
-  touch-action: manipulation; 
+  touch-action: manipulation;
 }
 
 body {
   margin: 0;
-  font-family: -apple-system, "Noto Sans KR", "Noto Sans JP", sans-serif;
+  font-family: -apple-system, 'Noto Sans KR', 'Noto Sans JP', sans-serif;
   background-color: #000;
 }
-
 
 /* =========================================
    2. 드래그 방지 및 허용 설정
    ========================================= */
 /* 기본적으로 모든 요소 드래그/선택 방지 (이미지 보호) */
-body, 
-#viewer-container, 
-img, 
+body,
+#viewer-container,
+img,
 .webtoon-img {
   user-select: none;
   -webkit-user-select: none;
@@ -53,10 +52,10 @@ img,
 
   /* ✅ [추가] 세로 중앙 정렬을 위한 Flex 설정 */
   display: flex;
-  flex-direction: column;  /* 요소들을 세로로 배치 (웹툰 모드 호환) */
+  flex-direction: column; /* 요소들을 세로로 배치 (웹툰 모드 호환) */
   justify-content: center; /* 세로축 중앙 정렬 (가로형 이미지가 화면 중앙에 오게 함) */
-  align-items: center;     /* 가로축 중앙 정렬 */
-  min-height: 100vh;       /* 컨테이너 최소 높이를 화면 전체로 잡아야 중앙 정렬 가능 */
+  align-items: center; /* 가로축 중앙 정렬 */
+  min-height: 100vh; /* 컨테이너 최소 높이를 화면 전체로 잡아야 중앙 정렬 가능 */
 }
 
 #viewer,
@@ -95,7 +94,7 @@ img,
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; 
+  pointer-events: none;
   z-index: 2;
 }
 
@@ -106,17 +105,17 @@ img,
 .line-box {
   position: absolute;
   display: flex;
-  align-items: stretch;      
-  justify-content: center;   
+  align-items: stretch;
+  justify-content: center;
   box-sizing: border-box;
   overflow: visible;
-  line-height: 1.0;
+  line-height: 1;
   white-space: nowrap;
   font-weight: bold;
 
   /* ✅ 추가: 배경색이 글자에 너무 딱 붙지 않게 여백 추가 */
-  padding: 2px 4px;        /* 상하 2px, 좌우 4px */
-  
+  padding: 2px 4px; /* 상하 2px, 좌우 4px */
+
   pointer-events: auto; /* 마우스 이벤트 받음 */
 }
 
@@ -126,19 +125,19 @@ img,
 .line-box.translated {
   white-space: pre-line !important;
   /* word-break: break-all !important;*/ /*이건 금칙 처리(줄 첫 글자 금지)때메 문제발생*/
-   line-break: anywhere; /*이건 절대 바꾸면 안됨*/
-  line-height: 1.0 !important;  
+  line-break: anywhere; /*이건 절대 바꾸면 안됨*/
+  line-height: 1 !important;
 
   /*번역시 여러개의 <font>가 들어가면서 <font>들이 좌우 정렬이 되는것을 방지*/
-  flex-direction: column;  
+  /* flex-direction: column;  */
 }
 
 .line-box.vertical {
-  writing-mode: vertical-rl;     
+  writing-mode: vertical-rl;
 }
 
 /*CSS로 번역이 넣는 <font>를 강제로 줄바꿈 처리*/
-.line-box.translated font[papago-translate="translated"] {
+.line-box.translated font[papago-translate='translated'] {
   display: block;
 }
 
@@ -152,18 +151,18 @@ img,
 /* ✅ 2. [핵심 수정] 숨김 모드(.hide-mode)일 때도 선택되면 글자가 보여야 함! */
 /* 이 부분이 없어서 투명색으로 남았던 것입니다. */
 .hide-mode .line-box.selected {
-  background-color: #e2e2e2;      /* 배경 회색 */
-  color: #000000 !important;     /* 글자 검은색 강제 (투명 덮어쓰기) */
-  opacity: 1 !important;         /* 불투명하게 */
+  background-color: #e2e2e2; /* 배경 회색 */
+  color: #000000 !important; /* 글자 검은색 강제 (투명 덮어쓰기) */
+  opacity: 1 !important; /* 불투명하게 */
 }
 
 /* 드래그해서 선택 시 노란색 하이라이트 */
 .line-box::selection {
-  background-color: rgba(255, 235, 59, 1.0); 
+  background-color: rgba(255, 235, 59, 1);
   color: #000 !important;
-} 
+}
 .hide-mode .line-box::selection {
-  background-color: rgba(255, 235, 59, 1.0);
+  background-color: rgba(255, 235, 59, 1);
   color: #000 !important;
 }
 
@@ -174,7 +173,7 @@ img,
     background-color: #e2e2e2;
     color: #000 !important;
     border-radius: 3px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
     z-index: 100;
     cursor: pointer;
   }
@@ -186,13 +185,15 @@ img,
 /* 배경 레이어 숨김 */
 .hide-mode #bg-layer {
   opacity: 0;
-  transition: opacity 0.2s; 
+  transition: opacity 0.2s;
 }
 
 /* 텍스트 투명화 */
 .hide-mode .line-box {
-  color: transparent !important; 
-  transition: color 0.1s, background-color 0.1s;
+  color: transparent !important;
+  transition:
+    color 0.1s,
+    background-color 0.1s;
 }
 
 /* 상호작용 차단 (투명도가 0일 때 JS에서 추가하는 클래스용) */
@@ -220,8 +221,12 @@ img,
   opacity: 0;
   z-index: 10;
 }
-#click-left { left: 0; }
-#click-right { right: 0; }
+#click-left {
+  left: 0;
+}
+#click-right {
+  right: 0;
+}
 
 /* 좌측 컨트롤 바 */
 .controls {
@@ -292,11 +297,13 @@ img,
   flex-direction: column;
   gap: 5px;
   margin-top: 5px;
-  
+
   /* 애니메이션 효과 */
   opacity: 1;
   transform: translateY(0);
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   pointer-events: auto;
 }
 
@@ -321,21 +328,26 @@ img,
   color: #333;
 }
 /* 유틸리티 */
-#folder-input, #json-input, #zip-input {
+#folder-input,
+#json-input,
+#zip-input {
   position: absolute;
-  width: 0; height: 0; opacity: 0; pointer-events: none;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
-.hidden { display: none; }
-
-
+.hidden {
+  display: none;
+}
 
 /* style.css 맨 아래에 추가하거나 적절한 위치에 삽입 */
 
 /* 웹툰 모드: 이미지 + 오버레이를 감싸는 컨테이너 */
 .webtoon-wrapper {
   position: relative; /* 중요: 내부 오버레이의 기준점 */
-  width: 100%;        /* 혹은 fit-content, 상황에 따라 조절 */
-  margin: 0 auto;     /* 중앙 정렬 */
+  width: 100%; /* 혹은 fit-content, 상황에 따라 조절 */
+  margin: 0 auto; /* 중앙 정렬 */
   display: flex;
   justify-content: center;
 }
@@ -364,7 +376,7 @@ img,
     color: #000 !important;
     opacity: 1 !important; /* 투명도 강제 복구 */
     border-radius: 3px;
-    box-shadow: 0 0 5px rgba(0,0,0,0.2);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
     z-index: 100;
     cursor: pointer;
   }
