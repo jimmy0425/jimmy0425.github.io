@@ -1,8 +1,4 @@
 // 요소 가져오기
-const pickBtn = document.getElementById('pick-folder');
-const fileInput = document.getElementById('folder-input');
-const loadJsonBtn = document.getElementById('load-json');
-const jsonInput = document.getElementById('json-input');
 const toggleBtn = document.getElementById('toggle-mode');
 const btnPrev = document.getElementById('prev');
 const btnNext = document.getElementById('next');
@@ -178,60 +174,6 @@ function processParsedData(parsed, fileName = '') {
   }
 }
 
-// 1. 폴더 및 파일 읽기
-pickBtn.addEventListener('click', () => fileInput.click());
-fileInput.addEventListener('change', async () => {
-  const allFiles = Array.from(fileInput.files);
-  files = allFiles
-    .filter((f) => /\.(jpe?g|png|gif|bmp|webp)$/i.test(f.name))
-    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-  if (!files.length) {
-    alert('이미지 파일이 없습니다.');
-    return;
-  }
-
-  const dataFiles = allFiles.filter((f) =>
-    /\.(json|mokuro|paddle)$/i.test(f.name),
-  );
-  ocrDataMap = {};
-  mokuroData = null;
-
-  for (const file of dataFiles) {
-    const text = await file.text();
-    try {
-      const parsed = JSON.parse(text);
-      processParsedData(parsed, file.name);
-    } catch (e) {
-      console.error('Data parsing error', e);
-    }
-  }
-
-  enableControls();
-  updatePageOptions();
-  resetZoom();
-  currentIndex = 0;
-  render();
-});
-
-// 2. 단일 데이터 파일 읽기 (.json, .mokuro, .paddle)
-loadJsonBtn.addEventListener('click', () => jsonInput.click());
-jsonInput.addEventListener('change', () => {
-  const file = jsonInput.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      processParsedData(parsed, file.name);
-      render();
-    } catch (e) {
-      console.error('Invalid Data file:', e);
-    }
-  };
-  reader.readAsText(file);
-});
-
 // 3. ZIP 파일 처리
 pickZipBtn.addEventListener('click', () => zipInput.click());
 zipInput.addEventListener('change', async (e) => {
@@ -278,6 +220,7 @@ zipInput.addEventListener('change', async (e) => {
   currentIndex = 0;
   resetZoom();
   render();
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
   const controls = document.querySelector('.controls');
   if (controls) controls.classList.add('hidden');
@@ -303,6 +246,20 @@ toggleBtn.addEventListener('click', () => {
   isWebtoonMode = !isWebtoonMode;
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
   render();
+
+  // 아래 스크롤 이동 로직 추가
+  if (isWebtoonMode) {
+    // 렌더링된 요소가 DOM에 완전히 자리 잡고 높이가 계산될 수 있도록 약간의 지연(setTimeout)을 줍니다.
+    setTimeout(() => {
+      const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+      if (wrappers[currentIndex]) {
+        wrappers[currentIndex].scrollIntoView({
+          behavior: 'auto',
+          block: 'start',
+        });
+      }
+    }, 100);
+  }
 });
 
 btnPrev.addEventListener('click', prevImage);

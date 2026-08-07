@@ -328,8 +328,6 @@ img,
   color: #333;
 }
 /* 유틸리티 */
-#folder-input,
-#json-input,
 #zip-input {
   position: absolute;
   width: 0;
