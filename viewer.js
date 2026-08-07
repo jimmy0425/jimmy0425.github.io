@@ -18,7 +18,8 @@ const clickLeft = document.getElementById('click-left');
 const clickRight = document.getElementById('click-right');
 const zipInput = document.getElementById('zip-input');
 const pickZipBtn = document.getElementById('pick-zip');
-const btnOpacity = document.getElementById('opacity-btn');
+const btnHorizontalHover = document.getElementById('btn-horizontal-hover');
+const btnVerticalHover = document.getElementById('btn-vertical-hover');
 const pageInfo = document.getElementById('page-info');
 const pageSelect = document.getElementById('page-select');
 
@@ -357,7 +358,7 @@ window.addEventListener('keydown', (e) => {
     )
       return;
     e.preventDefault();
-    btnOpacity.click();
+    btnHorizontalHover.click();
     return;
   }
   if (e.key === '+' || e.key === '=') {
@@ -687,13 +688,26 @@ hideTextButton.addEventListener('click', () => {
   hideTextButton.textContent = isTextHidden ? '제거' : '생성';
 });
 
-btnOpacity.addEventListener('click', () => {
-  const modes = ['가로', '세로', '호버'];
-  const idx = modes.indexOf(textMode);
-  textMode = modes[(idx + 1) % modes.length];
+// 1. 가로모드 ↔ 호버모드 토글 버튼
+btnHorizontalHover.addEventListener('click', () => {
+  textMode = textMode === '가로' ? '호버' : '가로';
+
+  btnHorizontalHover.textContent =
+    textMode === '가로' ? '가로모드' : '호버모드';
+  btnVerticalHover.textContent = '세로모드'; // 반대편 버튼 텍스트 초기화
 
   applyTextOpacity();
-  btnOpacity.textContent = textMode + '모드';
+  renderTextBoxes(isTextHidden);
+});
+
+// 2. 세로모드 ↔ 호버모드 토글 버튼
+btnVerticalHover.addEventListener('click', () => {
+  textMode = textMode === '세로' ? '호버' : '세로';
+
+  btnVerticalHover.textContent = textMode === '세로' ? '세로모드' : '호버모드';
+  btnHorizontalHover.textContent = '가로모드'; // 반대편 버튼 텍스트 초기화
+
+  applyTextOpacity();
   renderTextBoxes(isTextHidden);
 });
 
