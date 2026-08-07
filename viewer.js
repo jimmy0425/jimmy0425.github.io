@@ -25,14 +25,100 @@ let currentIndex = 0;
 let isWebtoonMode = false;
 let displayMode = 'fit-screen';
 let zoomFactor = 1;
-// let textOpacity = 1.0;
 let textMode = '가로'; // '가로', '세로', '호버' 3가지 상태로 관리
 let isTextHidden = false;
+let isToggling = false; // [추가] 모드 전환 중 레이아웃 팽창으로 인한 스크롤 꼬임 방지 락
+
+// --- [추가] 웹툰 모드 최적화를 위한 상태 변수 ---
+let webtoonObserver = null;
+let pageTrackerObserver = null; // [추가] 현재 읽고 있는 페이지 추적용
+const visibleWebtoonPages = new Set(); // 현재 화면에 가까이 있는 페이지 인덱스 추적
 
 // 데이터 통합 저장소
 let dataType = 'none'; // 'paddle' 또는 'mokuro'
 let ocrDataMap = {};
 let mokuroData = null;
+
+// --- [추가] 화면 중앙을 기준으로 현재 읽고 있는 페이지 판별 옵저버 ---
+function setupPageTrackerObserver() {
+  if (pageTrackerObserver) {
+    pageTrackerObserver.disconnect();
+  }
+
+  pageTrackerObserver = new IntersectionObserver(
+    (entries) => {
+      if (isToggling) return; // [핵심] 전환 중 요동치는 화면은 옵저버 감지 무시
+
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const newIndex = parseInt(entry.target.dataset.index, 10);
+
+          if (currentIndex !== newIndex) {
+            currentIndex = newIndex;
+            if (files.length > 0) {
+              pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
+              pageSelect.value = currentIndex;
+            }
+          }
+        }
+      });
+    },
+    { rootMargin: '-49% 0px -49% 0px' },
+  );
+}
+
+// --- [추가] 화면 중앙을 기준으로 현재 읽고 있는 페이지 판별 옵저버 ---
+function setupPageTrackerObserver() {
+  if (pageTrackerObserver) {
+    pageTrackerObserver.disconnect();
+  }
+
+  pageTrackerObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const newIndex = parseInt(entry.target.dataset.index, 10);
+
+          // 값이 실제로 변경되었을 때만 UI 업데이트 (불필요한 업데이트 방지)
+          if (currentIndex !== newIndex) {
+            currentIndex = newIndex;
+            if (files.length > 0) {
+              pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
+              pageSelect.value = currentIndex;
+            }
+          }
+        }
+      });
+    },
+    { rootMargin: '-49% 0px -49% 0px' },
+  );
+}
+// --- [추가] 화면에 보이는 웹툰 페이지만 감지하는 옵저버 설정 ---
+function setupWebtoonObserver() {
+  if (webtoonObserver) {
+    webtoonObserver.disconnect();
+  }
+
+  webtoonObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        const wrapper = entry.target;
+        const idx = parseInt(wrapper.dataset.index, 10);
+        const img = wrapper.querySelector('img');
+        const overlay = wrapper.querySelector('.webtoon-overlay');
+
+        if (entry.isIntersecting) {
+          visibleWebtoonPages.add(idx);
+          tryDrawWebtoonText(idx, img, overlay);
+        } else {
+          visibleWebtoonPages.delete(idx);
+          overlay.innerHTML = '';
+        }
+      });
+    },
+    { rootMargin: '200% 0px' },
+  );
+}
 
 singleImg.addEventListener('load', () => {
   renderTextBoxes(isTextHidden);
@@ -96,10 +182,16 @@ function render() {
 
   if (isWebtoonMode) {
     overlayContainer.innerHTML = '';
+
+    // [추가] 웹툰 렌더링 시 옵저버 초기화
+    setupWebtoonObserver();
+    setupPageTrackerObserver();
+    visibleWebtoonPages.clear();
+
     files.forEach((file, idx) => {
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
-
+      wrapper.dataset.index = idx;
       const img = document.createElement('img');
       img.src = URL.createObjectURL(file);
       img.className = 'webtoon-img';
@@ -113,11 +205,15 @@ function render() {
 
       img.onload = () => {
         applyStyles(img);
-        drawPageText(idx, img, localOverlay);
-        applyTextOpacity();
+        tryDrawWebtoonText(idx, img, localOverlay);
       };
+
+      // [추가] 래퍼 감시 시작
+      webtoonObserver.observe(wrapper);
+      pageTrackerObserver.observe(wrapper); // [추가] 감시 대상에 등록
     });
   } else {
+    if (pageTrackerObserver) pageTrackerObserver.disconnect(); // [추가] 단일 모드일 때 해제
     singleImg.onload = () => {
       updateAllStyles();
     };
@@ -243,24 +339,92 @@ function enableControls() {
 
 // UI 컨트롤 이벤트
 toggleBtn.addEventListener('click', () => {
+  if (isToggling) return; // 전환 중 중복 클릭 방지
+
+  let targetIndex = currentIndex;
+
+  // 웹툰 모드 -> 단일 모드: 현재 화면 최상단 페이지 추적
+  if (isWebtoonMode) {
+    const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+    for (let wrapper of wrappers) {
+      if (wrapper.getBoundingClientRect().bottom > 0) {
+        targetIndex = parseInt(wrapper.dataset.index, 10);
+        break;
+      }
+    }
+  }
+
   isWebtoonMode = !isWebtoonMode;
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
+
+  isToggling = true; // [추가] 렌더링 팽창 감지 차단 시작
   render();
 
-  // 아래 스크롤 이동 로직 추가
   if (isWebtoonMode) {
-    // 렌더링된 요소가 DOM에 완전히 자리 잡고 높이가 계산될 수 있도록 약간의 지연(setTimeout)을 줍니다.
-    setTimeout(() => {
+    window.scrollTo(0, 0);
+
+    let anchorAttempts = 0;
+    // 이미지가 비동기 로딩되며 세로로 팽창할 때 스크롤이 밀리는 현상 완벽 방어
+    // 50ms마다 총 15번(750ms) 타겟 페이지를 지속적으로 화면 맨 위로 고정시킵니다.
+    const anchorInterval = setInterval(() => {
       const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
-      if (wrappers[currentIndex]) {
-        wrappers[currentIndex].scrollIntoView({
+      if (wrappers[targetIndex]) {
+        wrappers[targetIndex].scrollIntoView({
           behavior: 'auto',
           block: 'start',
         });
       }
+
+      anchorAttempts++;
+      if (anchorAttempts >= 15) {
+        clearInterval(anchorInterval);
+
+        // 팽창이 끝난 후 깔끔하게 최종 번호 UI 업데이트 및 락 해제
+        currentIndex = targetIndex;
+        if (files.length > 0) {
+          pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
+          pageSelect.value = currentIndex;
+        }
+        isToggling = false;
+      }
+    }, 50);
+  } else {
+    // 단일 모드로 복귀 시 상태 복구 및 스크롤 초기화
+    currentIndex = targetIndex;
+    if (files.length > 0) {
+      pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
+      pageSelect.value = currentIndex;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    setTimeout(() => {
+      isToggling = false;
     }, 100);
   }
 });
+
+// [추가] 줌 배율 적용 및 스크롤 위치를 보정하는 통합 함수
+function applyZoom(multiplier) {
+  let currentWrapper = null;
+
+  // 웹툰 모드일 때 화면 상단(bottom > 0)에 가장 먼저 걸쳐있는 페이지 요소 찾기
+  if (isWebtoonMode) {
+    const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+    for (let wrapper of wrappers) {
+      if (wrapper.getBoundingClientRect().bottom > 0) {
+        currentWrapper = wrapper;
+        break;
+      }
+    }
+  }
+
+  zoomFactor *= multiplier;
+  updateAllStyles();
+
+  // 웹툰 모드라면 찾은 페이지의 맨 위로 즉시 스크롤
+  if (isWebtoonMode && currentWrapper) {
+    currentWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
+  }
+}
 
 btnPrev.addEventListener('click', prevImage);
 btnNext.addEventListener('click', nextImage);
@@ -279,14 +443,8 @@ btnOriginal.addEventListener('click', () => {
   resetZoom();
   updateAllStyles();
 });
-btnZoomIn.addEventListener('click', () => {
-  zoomFactor *= 1.1;
-  updateAllStyles();
-});
-btnZoomOut.addEventListener('click', () => {
-  zoomFactor *= 0.9;
-  updateAllStyles();
-});
+btnZoomIn.addEventListener('click', () => applyZoom(1.1));
+btnZoomOut.addEventListener('click', () => applyZoom(0.9));
 
 clickLeft.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -302,9 +460,8 @@ clickRight.addEventListener('click', (e) => {
 viewerContainer.addEventListener('wheel', (e) => {
   if (!e.shiftKey) return;
   e.preventDefault();
-  if (e.deltaY < 0) zoomFactor *= 1.1;
-  else if (e.deltaY > 0) zoomFactor *= 0.9;
-  updateAllStyles();
+  if (e.deltaY < 0) applyZoom(1.1);
+  else if (e.deltaY > 0) applyZoom(0.9);
 });
 
 window.addEventListener('keydown', (e) => {
@@ -318,12 +475,17 @@ window.addEventListener('keydown', (e) => {
     btnHorizontalHover.click();
     return;
   }
+  // [추가] 'w' 또는 'W' 키를 누르면 웹툰 모드 토글
+  if (e.key.toLowerCase() === 'w') {
+    toggleBtn.click();
+    return;
+  }
+
+  // 줌 단축키 로직 교체
   if (e.key === '+' || e.key === '=') {
-    zoomFactor *= 1.1;
-    updateAllStyles();
+    applyZoom(1.1);
   } else if (e.key === '-') {
-    zoomFactor *= 0.9;
-    updateAllStyles();
+    applyZoom(0.9);
   } else if (e.key === 'ArrowLeft') nextImage();
   else if (e.key === 'ArrowRight') prevImage();
 });
@@ -604,17 +766,25 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
 function renderTextBoxes(isTextHidden) {
   if (isWebtoonMode) {
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
-    wrappers.forEach((wrapper, idx) => {
+    wrappers.forEach((wrapper) => {
+      const idx = parseInt(wrapper.dataset.index, 10);
       const img = wrapper.querySelector('img');
       const overlay = wrapper.querySelector('.webtoon-overlay');
+
       if (img && overlay) {
-        overlay.innerHTML = '';
-        if (!isTextHidden) drawPageText(idx, img, overlay);
+        overlay.innerHTML = ''; // 초기화
+
+        // [수정] 현재 화면 안에 들어온 상태일 때만 생성
+        if (!isTextHidden && visibleWebtoonPages.has(idx)) {
+          drawPageText(idx, img, overlay);
+        }
       }
     });
     applyTextOpacity();
     return;
   }
+
+  // 단일모드 부분은 기존과 동일
   overlayContainer.innerHTML = '';
   if (isTextHidden) return;
 
@@ -732,3 +902,19 @@ document.addEventListener(
   },
   { passive: false },
 );
+
+function tryDrawWebtoonText(idx, img, overlay) {
+  // 숨김 상태, 화면 밖, 이미 그려짐, 이미지 로딩 안 됨 상태면 취소
+  if (isTextHidden || !visibleWebtoonPages.has(idx) || overlay.innerHTML !== '')
+    return;
+  if (!img.complete || img.naturalWidth === 0) return;
+
+  // DOM 렌더링 직후라 너비가 0인 경우 50ms 후 재시도
+  if (img.clientWidth === 0) {
+    setTimeout(() => tryDrawWebtoonText(idx, img, overlay), 50);
+    return;
+  }
+
+  drawPageText(idx, img, overlay);
+  applyTextOpacity();
+}
