@@ -642,7 +642,9 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
       if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
     });
 
-    textBox.textContent = sanitizedContent;
+    const textSpan = document.createElement('span');
+    textSpan.textContent = sanitizedContent;
+    textBox.appendChild(textSpan);
     targetLayer.appendChild(textBox);
   });
 }
@@ -758,7 +760,9 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
       if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
     });
 
-    textBox.textContent = sanitizedContent;
+    const textSpan = document.createElement('span');
+    textSpan.textContent = sanitizedContent;
+    textBox.appendChild(textSpan);
     targetLayer.appendChild(textBox);
   });
 }
