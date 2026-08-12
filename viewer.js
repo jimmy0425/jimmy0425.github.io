@@ -475,7 +475,21 @@ window.addEventListener('keydown', (e) => {
     btnHorizontalHover.click();
     return;
   }
-  // [추가] 'w' 또는 'W' 키를 누르면 웹툰 모드 토글
+
+  // [추가] Tab 키를 누르면 메뉴(≡) 토글
+  if (e.key === 'Tab') {
+    e.preventDefault(); // 탭 키로 인한 기본 포커스 이동 방지
+    menuToggleBtn.click();
+    return;
+  }
+
+  // [추가] h 키를 누르면 세로모드 토글
+  if (e.key.toLowerCase() === 'h') {
+    btnVerticalHover.click();
+    return;
+  }
+
+  // 'w' 또는 'W' 키를 누르면 웹툰 모드 토글
   if (e.key.toLowerCase() === 'w') {
     toggleBtn.click();
     return;
