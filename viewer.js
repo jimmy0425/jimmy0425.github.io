@@ -624,7 +624,8 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     textBox.style.wordBreak = 'break-all';
     textBox.style.lineBreak = 'anywhere';
 
-    const sanitizedContent = block.content.replace(/\n/g, '');
+    //const sanitizedContent = block.content.replace(/\n/g, '');
+    const sanitizedContent = block.content;
     const textLen = sanitizedContent.length;
     let computedFontSize =
       textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
@@ -712,10 +713,13 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     targetLayer.appendChild(bgBox);
 
     // 여러 줄의 텍스트를 하나의 문자열로 병합
+    /*
     let originalLines = Array.isArray(block.lines)
       ? block.lines.map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
       : [];
     const sanitizedContent = originalLines.join('').replace(/\n/g, '');
+    */
+    const sanitizedContent = block.content;
     if (!sanitizedContent) return;
 
     const textBox = document.createElement('div');
