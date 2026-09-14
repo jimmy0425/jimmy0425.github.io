@@ -25,21 +25,19 @@ let currentIndex = 0;
 let isWebtoonMode = false;
 let displayMode = 'fit-screen';
 let zoomFactor = 1;
-let textMode = '가로'; // '가로', '세로', '호버' 3가지 상태로 관리
+let textMode = '가로';
 let isTextHidden = false;
-let isToggling = false; // [추가] 모드 전환 중 레이아웃 팽창으로 인한 스크롤 꼬임 방지 락
+let isToggling = false;
 
-// --- [추가] 웹툰 모드 최적화를 위한 상태 변수 ---
 let webtoonObserver = null;
-let pageTrackerObserver = null; // [추가] 현재 읽고 있는 페이지 추적용
-const visibleWebtoonPages = new Set(); // 현재 화면에 가까이 있는 페이지 인덱스 추적
+let pageTrackerObserver = null;
+const visibleWebtoonPages = new Set();
 
 // 데이터 통합 저장소
-let dataType = 'none'; // 'paddle' 또는 'mokuro'
+let dataType = 'none';
 let ocrDataMap = {};
 let mokuroData = null;
 
-// --- [추가] 화면 중앙을 기준으로 현재 읽고 있는 페이지 판별 옵저버 ---
 function setupPageTrackerObserver() {
   if (pageTrackerObserver) {
     pageTrackerObserver.disconnect();
@@ -47,12 +45,11 @@ function setupPageTrackerObserver() {
 
   pageTrackerObserver = new IntersectionObserver(
     (entries) => {
-      if (isToggling) return; // [핵심] 전환 중 요동치는 화면은 옵저버 감지 무시
+      if (isToggling) return;
 
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const newIndex = parseInt(entry.target.dataset.index, 10);
-
           if (currentIndex !== newIndex) {
             currentIndex = newIndex;
             if (files.length > 0) {
@@ -67,33 +64,7 @@ function setupPageTrackerObserver() {
   );
 }
 
-// --- [추가] 화면 중앙을 기준으로 현재 읽고 있는 페이지 판별 옵저버 ---
-function setupPageTrackerObserver() {
-  if (pageTrackerObserver) {
-    pageTrackerObserver.disconnect();
-  }
-
-  pageTrackerObserver = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const newIndex = parseInt(entry.target.dataset.index, 10);
-
-          // 값이 실제로 변경되었을 때만 UI 업데이트 (불필요한 업데이트 방지)
-          if (currentIndex !== newIndex) {
-            currentIndex = newIndex;
-            if (files.length > 0) {
-              pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
-              pageSelect.value = currentIndex;
-            }
-          }
-        }
-      });
-    },
-    { rootMargin: '-49% 0px -49% 0px' },
-  );
-}
-// --- [추가] 화면에 보이는 웹툰 페이지만 감지하는 옵저버 설정 ---
+// 화면에 보이는 웹툰 페이지만 감지 및 메모리 할당/해제
 function setupWebtoonObserver() {
   if (webtoonObserver) {
     webtoonObserver.disconnect();
@@ -109,9 +80,19 @@ function setupWebtoonObserver() {
 
         if (entry.isIntersecting) {
           visibleWebtoonPages.add(idx);
-          tryDrawWebtoonText(idx, img, overlay);
+          // 메모리 할당
+          if (!img.src || img.src === window.location.href || img.src === '') {
+            img.src = URL.createObjectURL(files[idx]);
+          } else if (img.complete) {
+            tryDrawWebtoonText(idx, img, overlay);
+          }
         } else {
           visibleWebtoonPages.delete(idx);
+          // 메모리 해제
+          if (img.src && img.src.startsWith('blob:')) {
+            URL.revokeObjectURL(img.src);
+            img.removeAttribute('src');
+          }
           overlay.innerHTML = '';
         }
       });
@@ -127,7 +108,6 @@ singleImg.addEventListener('load', () => {
 function applyTextOpacity() {
   const singleContainer = document.getElementById('overlay-container');
   const webtoonContainers = document.querySelectorAll('.webtoon-overlay');
-  //const isHidden = textOpacity === 0;
   const isHidden = textMode === '호버';
 
   const toggleClass = (el) => {
@@ -165,25 +145,44 @@ function applyStyles(img) {
   }
 }
 
+// Wrapper 크기도 업데이트하여 스크롤 보존
 function updateAllStyles() {
   viewerContainer.querySelectorAll('img').forEach((img) => {
-    if (img.complete) applyStyles(img);
-    else img.onload = () => applyStyles(img);
+    const update = () => {
+      applyStyles(img);
+      if (isWebtoonMode) {
+        const wrapper = img.closest('.webtoon-wrapper');
+        if (wrapper && img.clientHeight > 0) {
+          wrapper.style.width = img.style.width !== 'auto' ? img.style.width : '100%';
+          wrapper.style.height = `${img.clientHeight}px`;
+        }
+      }
+    };
+
+    if (img.complete && img.src && img.src.startsWith('blob:')) {
+      update();
+    } else if (img.src && img.src.startsWith('blob:')) {
+      img.onload = update;
+    }
   });
   renderTextBoxes(isTextHidden);
   applyTextOpacity();
 }
 
 function render() {
-  viewerContainer.querySelectorAll('img').forEach((n) => n.remove());
+  // 메모리 누수 방지: 기존 할당된 blob 해제
+  viewerContainer.querySelectorAll('img').forEach((img) => {
+    if (img.src && img.src.startsWith('blob:')) {
+      URL.revokeObjectURL(img.src);
+    }
+    img.remove();
+  });
   viewerContainer
     .querySelectorAll('.webtoon-wrapper')
     .forEach((n) => n.remove());
 
   if (isWebtoonMode) {
     overlayContainer.innerHTML = '';
-
-    // [추가] 웹툰 렌더링 시 옵저버 초기화
     setupWebtoonObserver();
     setupPageTrackerObserver();
     visibleWebtoonPages.clear();
@@ -192,9 +191,11 @@ function render() {
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
       wrapper.dataset.index = idx;
+      wrapper.style.minHeight = '100vh'; // 초기 레이아웃 팽창 방지용
+
       const img = document.createElement('img');
-      img.src = URL.createObjectURL(file);
       img.className = 'webtoon-img';
+      img.decoding = 'async'; // 스크롤 버벅임 방지
 
       const localOverlay = document.createElement('div');
       localOverlay.className = 'webtoon-overlay';
@@ -205,15 +206,17 @@ function render() {
 
       img.onload = () => {
         applyStyles(img);
+        wrapper.style.minHeight = '0';
+        wrapper.style.width = img.style.width !== 'auto' ? img.style.width : '100%';
+        wrapper.style.height = `${img.clientHeight}px`;
         tryDrawWebtoonText(idx, img, localOverlay);
       };
 
-      // [추가] 래퍼 감시 시작
       webtoonObserver.observe(wrapper);
-      pageTrackerObserver.observe(wrapper); // [추가] 감시 대상에 등록
+      pageTrackerObserver.observe(wrapper);
     });
   } else {
-    if (pageTrackerObserver) pageTrackerObserver.disconnect(); // [추가] 단일 모드일 때 해제
+    if (pageTrackerObserver) pageTrackerObserver.disconnect();
     singleImg.onload = () => {
       updateAllStyles();
     };
@@ -251,7 +254,6 @@ function resetZoom() {
   zoomFactor = 1;
 }
 
-// 확장자명 기반 통합 파싱 함수
 function processParsedData(parsed, fileName = '') {
   const ext = fileName.split('.').pop().toLowerCase();
 
@@ -270,7 +272,6 @@ function processParsedData(parsed, fileName = '') {
   }
 }
 
-// 3. ZIP 파일 처리
 pickZipBtn.addEventListener('click', () => zipInput.click());
 zipInput.addEventListener('change', async (e) => {
   const zipFile = e.target.files[0];
@@ -314,7 +315,6 @@ zipInput.addEventListener('change', async (e) => {
   enableControls();
   updatePageOptions();
   currentIndex = 0;
-  //resetZoom();
   render();
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
 
@@ -337,13 +337,10 @@ function enableControls() {
   ].forEach((btn) => (btn.disabled = false));
 }
 
-// UI 컨트롤 이벤트
 toggleBtn.addEventListener('click', () => {
-  if (isToggling) return; // 전환 중 중복 클릭 방지
+  if (isToggling) return;
 
   let targetIndex = currentIndex;
-
-  // 웹툰 모드 -> 단일 모드: 현재 화면 최상단 페이지 추적
   if (isWebtoonMode) {
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
     for (let wrapper of wrappers) {
@@ -356,16 +353,13 @@ toggleBtn.addEventListener('click', () => {
 
   isWebtoonMode = !isWebtoonMode;
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
-
-  isToggling = true; // [추가] 렌더링 팽창 감지 차단 시작
+  isToggling = true;
   render();
 
   if (isWebtoonMode) {
     window.scrollTo(0, 0);
 
     let anchorAttempts = 0;
-    // 이미지가 비동기 로딩되며 세로로 팽창할 때 스크롤이 밀리는 현상 완벽 방어
-    // 50ms마다 총 15번(750ms) 타겟 페이지를 지속적으로 화면 맨 위로 고정시킵니다.
     const anchorInterval = setInterval(() => {
       const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
       if (wrappers[targetIndex]) {
@@ -378,8 +372,6 @@ toggleBtn.addEventListener('click', () => {
       anchorAttempts++;
       if (anchorAttempts >= 15) {
         clearInterval(anchorInterval);
-
-        // 팽창이 끝난 후 깔끔하게 최종 번호 UI 업데이트 및 락 해제
         currentIndex = targetIndex;
         if (files.length > 0) {
           pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
@@ -389,7 +381,6 @@ toggleBtn.addEventListener('click', () => {
       }
     }, 50);
   } else {
-    // 단일 모드로 복귀 시 상태 복구 및 스크롤 초기화
     currentIndex = targetIndex;
     if (files.length > 0) {
       pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
@@ -402,11 +393,8 @@ toggleBtn.addEventListener('click', () => {
   }
 });
 
-// [추가] 줌 배율 적용 및 스크롤 위치를 보정하는 통합 함수
 function applyZoom(multiplier) {
   let currentWrapper = null;
-
-  // 웹툰 모드일 때 화면 상단(bottom > 0)에 가장 먼저 걸쳐있는 페이지 요소 찾기
   if (isWebtoonMode) {
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
     for (let wrapper of wrappers) {
@@ -420,7 +408,6 @@ function applyZoom(multiplier) {
   zoomFactor *= multiplier;
   updateAllStyles();
 
-  // 웹툰 모드라면 찾은 페이지의 맨 위로 즉시 스크롤
   if (isWebtoonMode && currentWrapper) {
     currentWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
   }
@@ -476,26 +463,22 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // [추가] Tab 키를 누르면 메뉴(≡) 토글
   if (e.key === 'Tab') {
-    e.preventDefault(); // 탭 키로 인한 기본 포커스 이동 방지
+    e.preventDefault();
     menuToggleBtn.click();
     return;
   }
 
-  // [추가] h 키를 누르면 세로모드 토글
   if (e.key.toLowerCase() === 'h') {
     btnVerticalHover.click();
     return;
   }
 
-  // 'w' 또는 'W' 키를 누르면 웹툰 모드 토글
   if (e.key.toLowerCase() === 'w') {
     toggleBtn.click();
     return;
   }
 
-  // 줌 단축키 로직 교체
   if (e.key === '+' || e.key === '=') {
     applyZoom(1.1);
   } else if (e.key === '-') {
@@ -504,7 +487,6 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowRight') prevImage();
 });
 
-// 공용 Helper 함수
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -552,14 +534,12 @@ function calculateDynamicFontSizeCap(blocks) {
   return Math.max(median * 1.2, 10);
 }
 
-// 통합 렌더링 라우터
 function drawPageText(pageIndex, imgEl, targetLayer) {
   if (isTextHidden) return;
   if (dataType === 'paddle') drawPaddleText(pageIndex, imgEl, targetLayer);
   else if (dataType === 'mokuro') drawMokuroText(pageIndex, imgEl, targetLayer);
 }
 
-// Paddle 방식 텍스트 그리기 로직
 function drawPaddleText(pageIndex, imgEl, targetLayer) {
   const file = files[pageIndex];
   if (!file || imgEl.naturalWidth === 0) return;
@@ -597,7 +577,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     let expandedWidth = bgWidth * 1.1;
     let expandedLeft = bgLeft - bgWidth * 0.05;
 
-    // 가로모드 또는 세로모드일 때 너비 2% 추가
     if (textMode === '가로' || textMode === '세로') {
       expandedWidth = bgWidth * 1.12;
       expandedLeft = bgLeft - bgWidth * 0.06;
@@ -618,7 +597,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
       textBox.classList.add('translated');
     }
 
-    // 세로모드이거나 호버모드이면서 vertical_text일 때 세로쓰기 적용
     if (
       (textMode === '세로' || textMode === '호버') &&
       block.label === 'vertical_text'
@@ -633,7 +611,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     textBox.style.height = `${bgHeight}px`;
     textBox.style.padding = '0';
     textBox.style.lineHeight = '1.0';
-
     textBox.style.whiteSpace = 'pre-wrap';
     textBox.style.wordBreak = 'break-all';
     textBox.style.lineBreak = 'anywhere';
@@ -652,7 +629,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
         .forEach((b) => b.classList.remove('selected'));
       textBox.classList.add('selected');
 
-      // 호버 모드일 때만 텍스트 복사
       if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
     });
 
@@ -663,7 +639,6 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
   });
 }
 
-// Mokuro 방식 텍스트 그리기 로직 (Paddle 방식과 동일하게 통합)
 function drawMokuroText(pageIndex, imgEl, targetLayer) {
   if (!mokuroData || !mokuroData.pages) return;
   const page = mokuroData.pages[pageIndex];
@@ -711,7 +686,6 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     let expandedWidth = bgWidth * 1.1;
     let expandedLeft = bgLeft - bgWidth * 0.05;
 
-    // 가로모드 또는 세로모드일 때 너비 2% 추가
     if (textMode === '가로' || textMode === '세로') {
       expandedWidth = bgWidth * 1.12;
       expandedLeft = bgLeft - bgWidth * 0.06;
@@ -725,7 +699,6 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     bgBox.style.height = `${bgHeight}px`;
     targetLayer.appendChild(bgBox);
 
-    // 여러 줄의 텍스트를 하나의 문자열로 병합
     let originalLines = Array.isArray(block.lines)
       ? block.lines.map((t) => String(t ?? ''))
       : [];
@@ -739,7 +712,6 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
       textBox.classList.add('translated');
     }
 
-    // 세로모드이거나 호버모드이면서 vertical일 때 세로쓰기 적용
     if ((textMode === '세로' || textMode === '호버') && block.vertical) {
       textBox.classList.add('vertical');
       textBox.style.display = 'block';
@@ -751,12 +723,10 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
     textBox.style.height = `${bgHeight}px`;
     textBox.style.padding = '0';
     textBox.style.lineHeight = '1.0';
-
     textBox.style.whiteSpace = 'pre-wrap';
     textBox.style.wordBreak = 'break-all';
     textBox.style.lineBreak = 'anywhere';
 
-    // Paddle 방식과 동일한 폰트 사이즈 계산 로직 적용
     const textLen = sanitizedContent.length;
     let computedFontSize =
       textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
@@ -770,7 +740,6 @@ function drawMokuroText(pageIndex, imgEl, targetLayer) {
         .forEach((b) => b.classList.remove('selected'));
       textBox.classList.add('selected');
 
-      // 호버 모드일 때 텍스트 복사
       if (textMode === '호버') navigator.clipboard.writeText(sanitizedContent);
     });
 
@@ -790,9 +759,7 @@ function renderTextBoxes(isTextHidden) {
       const overlay = wrapper.querySelector('.webtoon-overlay');
 
       if (img && overlay) {
-        overlay.innerHTML = ''; // 초기화
-
-        // [수정] 현재 화면 안에 들어온 상태일 때만 생성
+        overlay.innerHTML = '';
         if (!isTextHidden && visibleWebtoonPages.has(idx)) {
           drawPageText(idx, img, overlay);
         }
@@ -802,7 +769,6 @@ function renderTextBoxes(isTextHidden) {
     return;
   }
 
-  // 단일모드 부분은 기존과 동일
   overlayContainer.innerHTML = '';
   if (isTextHidden) return;
 
@@ -833,25 +799,18 @@ hideTextButton.addEventListener('click', () => {
   hideTextButton.textContent = isTextHidden ? '제거' : '생성';
 });
 
-// 1. 가로모드 ↔ 호버모드 토글 버튼
 btnHorizontalHover.addEventListener('click', () => {
   textMode = textMode === '가로' ? '호버' : '가로';
-
-  btnHorizontalHover.textContent =
-    textMode === '가로' ? '가로모드' : '호버모드';
-  btnVerticalHover.textContent = '세로모드'; // 반대편 버튼 텍스트 초기화
-
+  btnHorizontalHover.textContent = textMode === '가로' ? '가로모드' : '호버모드';
+  btnVerticalHover.textContent = '세로모드';
   applyTextOpacity();
   renderTextBoxes(isTextHidden);
 });
 
-// 2. 세로모드 ↔ 호버모드 토글 버튼
 btnVerticalHover.addEventListener('click', () => {
   textMode = textMode === '세로' ? '호버' : '세로';
-
   btnVerticalHover.textContent = textMode === '세로' ? '세로모드' : '호버모드';
-  btnHorizontalHover.textContent = '가로모드'; // 반대편 버튼 텍스트 초기화
-
+  btnHorizontalHover.textContent = '가로모드';
   applyTextOpacity();
   renderTextBoxes(isTextHidden);
 });
@@ -922,12 +881,10 @@ document.addEventListener(
 );
 
 function tryDrawWebtoonText(idx, img, overlay) {
-  // 숨김 상태, 화면 밖, 이미 그려짐, 이미지 로딩 안 됨 상태면 취소
   if (isTextHidden || !visibleWebtoonPages.has(idx) || overlay.innerHTML !== '')
     return;
   if (!img.complete || img.naturalWidth === 0) return;
 
-  // DOM 렌더링 직후라 너비가 0인 경우 50ms 후 재시도
   if (img.clientWidth === 0) {
     setTimeout(() => tryDrawWebtoonText(idx, img, overlay), 50);
     return;
