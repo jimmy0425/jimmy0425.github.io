@@ -79,6 +79,8 @@ function setupWebtoonObserver() {
 
         if (entry.isIntersecting) {
           visibleWebtoonPages.add(idx);
+          wrapper.style.height = 'auto'; // 화면에 보일 때는 이미지 크기에 맞춰 자동 조절
+
           if (!img.src || img.src === window.location.href || img.src === '') {
             img.src = URL.createObjectURL(files[idx]);
           } else if (img.complete) {
@@ -87,6 +89,7 @@ function setupWebtoonObserver() {
         } else {
           visibleWebtoonPages.delete(idx);
           if (img.src && img.src.startsWith('blob:')) {
+            wrapper.style.height = `${wrapper.clientHeight}px`; // 화면에서 벗어나 이미지 해제 전, 스크롤 튐 방지를 위해 현재 높이 고정
             URL.revokeObjectURL(img.src);
             img.removeAttribute('src');
           }
@@ -146,16 +149,14 @@ function updateAllStyles() {
   viewerContainer.querySelectorAll('img').forEach((img) => {
     if (img.complete && img.src && img.src.startsWith('blob:')) {
       applyStyles(img);
-      if (isWebtoonMode) {
-        const wrapper = img.closest('.webtoon-wrapper');
-        if (wrapper && img.clientHeight > 0) {
-          wrapper.style.height = `${img.clientHeight}px`;
-        }
-      }
     }
   });
-  renderTextBoxes(isTextHidden);
-  applyTextOpacity();
+  
+  // 브라우저가 이미지 크기(layout)를 완전히 줄인 후 텍스트 박스를 그리도록 동기화
+  requestAnimationFrame(() => {
+    renderTextBoxes(isTextHidden);
+    applyTextOpacity();
+  });
 }
 
 function render() {
@@ -179,6 +180,12 @@ function render() {
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
       wrapper.dataset.index = idx;
+      
+      // 오버레이 기준점 및 정렬 완벽 고정
+      wrapper.style.position = 'relative';
+      wrapper.style.display = 'flex';
+      wrapper.style.justifyContent = 'center';
+      wrapper.style.alignItems = 'flex-start';
       wrapper.style.minHeight = '100vh';
 
       const img = document.createElement('img');
@@ -195,7 +202,7 @@ function render() {
       img.onload = () => {
         applyStyles(img);
         wrapper.style.minHeight = '0';
-        wrapper.style.height = `${img.clientHeight}px`;
+        wrapper.style.height = 'auto'; 
         tryDrawWebtoonText(idx, img, localOverlay);
       };
 
@@ -214,10 +221,9 @@ function render() {
   btnPrev.style.display = isWebtoonMode ? 'none' : '';
   btnNext.style.display = isWebtoonMode ? 'none' : '';
 
-  // 추가된 코드: 웹툰 모드일 때 3개 버튼 비활성화
-  btnFitWidth.disabled = isWebtoonMode;
-  btnFitScreen.disabled = isWebtoonMode;
-  btnOriginal.disabled = isWebtoonMode;
+  btnFitWidth.disabled = false;
+  btnFitScreen.disabled = false;
+  btnOriginal.disabled = false;
 
   if (files.length > 0) {
     pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
@@ -347,9 +353,8 @@ toggleBtn.addEventListener('click', () => {
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
   isToggling = true;
 
-  // [추가된 코드] 웹툰 모드 진입 시 강제로 fit-screen 및 확대 비율 초기화
   if (isWebtoonMode) {
-    displayMode = 'fit-screen';
+    displayMode = 'fit-width';
     zoomFactor = 1;
   }
   render();
@@ -407,7 +412,9 @@ function applyZoom(multiplier) {
   updateAllStyles();
 
   if (isWebtoonMode && currentWrapper) {
-    currentWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
+    requestAnimationFrame(() => {
+      currentWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
+    });
   }
 }
 
@@ -488,25 +495,6 @@ window.addEventListener('keydown', (e) => {
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
-function mergeBlockLines(block) {
-  if (!block || !Array.isArray(block.lines)) return '';
-  return block.lines
-    .map((t) => String(t ?? '').replace(/[．.]{2,}/g, '.'))
-    .join('');
-}
-function getPolygonBounds(coords) {
-  let minX = Infinity,
-    minY = Infinity,
-    maxX = -Infinity,
-    maxY = -Infinity;
-  coords.forEach(([x, y]) => {
-    if (x < minX) minX = x;
-    if (x > maxX) maxX = x;
-    if (y < minY) minY = y;
-    if (y > maxY) maxY = y;
-  });
-  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
 function fixVerticalLineCoords(block) {
   const coords = JSON.parse(JSON.stringify(block.lines_coords));
   if (!block.vertical || coords.length < 2) return coords;
@@ -521,15 +509,6 @@ function fixVerticalLineCoords(block) {
     }
     return line;
   });
-}
-function calculateDynamicFontSizeCap(blocks) {
-  const fontSizes = blocks.map((block) => block.font_size);
-  const sortedSizes = [...fontSizes].sort((a, b) => a - b);
-  let median =
-    sortedSizes.length % 2 === 0
-      ? sortedSizes[sortedSizes.length / 2 - 1]
-      : sortedSizes[Math.floor(sortedSizes.length / 2)];
-  return Math.max(median * 1.2, 10);
 }
 
 function drawPageText(pageIndex, imgEl, targetLayer) {
@@ -759,12 +738,13 @@ function renderTextBoxes(isTextHidden) {
       if (img && overlay) {
         overlay.innerHTML = '';
 
-        // [핵심 변경 1] 텍스트 렌더링 직전에 오버레이 크기/좌표를 강제로 이미지에 맞춤
         if (img.clientWidth > 0 && img.clientHeight > 0) {
+          overlay.style.position = 'absolute';
           overlay.style.width = `${img.clientWidth}px`;
           overlay.style.height = `${img.clientHeight}px`;
           overlay.style.left = `${img.offsetLeft}px`;
           overlay.style.top = `${img.offsetTop}px`;
+          overlay.style.pointerEvents = 'none';
         }
 
         if (!isTextHidden && visibleWebtoonPages.has(idx)) {
@@ -898,12 +878,21 @@ function tryDrawWebtoonText(idx, img, overlay) {
     return;
   }
 
-  // [핵심 변경 2] 초기 로드 시에도 오버레이 위치/크기를 이미지와 완전히 맞춤
+  overlay.style.position = 'absolute';
   overlay.style.width = `${img.clientWidth}px`;
   overlay.style.height = `${img.clientHeight}px`;
   overlay.style.left = `${img.offsetLeft}px`;
   overlay.style.top = `${img.offsetTop}px`;
+  overlay.style.pointerEvents = 'none';
 
   drawPageText(idx, img, overlay);
   applyTextOpacity();
 }
+
+let resizeTimeout = null;
+window.addEventListener('resize', () => {
+  if (resizeTimeout) clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    updateAllStyles();
+  }, 100);
+});
