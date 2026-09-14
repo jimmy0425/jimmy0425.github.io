@@ -64,7 +64,6 @@ function setupPageTrackerObserver() {
   );
 }
 
-// 화면에 보이는 웹툰 페이지만 감지 및 메모리 할당/해제
 function setupWebtoonObserver() {
   if (webtoonObserver) {
     webtoonObserver.disconnect();
@@ -80,7 +79,6 @@ function setupWebtoonObserver() {
 
         if (entry.isIntersecting) {
           visibleWebtoonPages.add(idx);
-          // 메모리 할당
           if (!img.src || img.src === window.location.href || img.src === '') {
             img.src = URL.createObjectURL(files[idx]);
           } else if (img.complete) {
@@ -88,7 +86,6 @@ function setupWebtoonObserver() {
           }
         } else {
           visibleWebtoonPages.delete(idx);
-          // 메모리 해제
           if (img.src && img.src.startsWith('blob:')) {
             URL.revokeObjectURL(img.src);
             img.removeAttribute('src');
@@ -145,24 +142,16 @@ function applyStyles(img) {
   }
 }
 
-// Wrapper 크기도 업데이트하여 스크롤 보존
 function updateAllStyles() {
   viewerContainer.querySelectorAll('img').forEach((img) => {
-    const update = () => {
+    if (img.complete && img.src && img.src.startsWith('blob:')) {
       applyStyles(img);
       if (isWebtoonMode) {
         const wrapper = img.closest('.webtoon-wrapper');
         if (wrapper && img.clientHeight > 0) {
-          wrapper.style.width = img.style.width !== 'auto' ? img.style.width : '100%';
           wrapper.style.height = `${img.clientHeight}px`;
         }
       }
-    };
-
-    if (img.complete && img.src && img.src.startsWith('blob:')) {
-      update();
-    } else if (img.src && img.src.startsWith('blob:')) {
-      img.onload = update;
     }
   });
   renderTextBoxes(isTextHidden);
@@ -170,7 +159,6 @@ function updateAllStyles() {
 }
 
 function render() {
-  // 메모리 누수 방지: 기존 할당된 blob 해제
   viewerContainer.querySelectorAll('img').forEach((img) => {
     if (img.src && img.src.startsWith('blob:')) {
       URL.revokeObjectURL(img.src);
@@ -191,11 +179,11 @@ function render() {
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
       wrapper.dataset.index = idx;
-      wrapper.style.minHeight = '100vh'; // 초기 레이아웃 팽창 방지용
+      wrapper.style.minHeight = '100vh';
 
       const img = document.createElement('img');
       img.className = 'webtoon-img';
-      img.decoding = 'async'; // 스크롤 버벅임 방지
+      img.decoding = 'async';
 
       const localOverlay = document.createElement('div');
       localOverlay.className = 'webtoon-overlay';
@@ -207,7 +195,6 @@ function render() {
       img.onload = () => {
         applyStyles(img);
         wrapper.style.minHeight = '0';
-        wrapper.style.width = img.style.width !== 'auto' ? img.style.width : '100%';
         wrapper.style.height = `${img.clientHeight}px`;
         tryDrawWebtoonText(idx, img, localOverlay);
       };
@@ -226,6 +213,11 @@ function render() {
 
   btnPrev.style.display = isWebtoonMode ? 'none' : '';
   btnNext.style.display = isWebtoonMode ? 'none' : '';
+
+  // 추가된 코드: 웹툰 모드일 때 3개 버튼 비활성화
+  btnFitWidth.disabled = isWebtoonMode;
+  btnFitScreen.disabled = isWebtoonMode;
+  btnOriginal.disabled = isWebtoonMode;
 
   if (files.length > 0) {
     pageInfo.textContent = `${currentIndex + 1} / ${files.length}`;
@@ -760,6 +752,15 @@ function renderTextBoxes(isTextHidden) {
 
       if (img && overlay) {
         overlay.innerHTML = '';
+
+        // [핵심 변경 1] 텍스트 렌더링 직전에 오버레이 크기/좌표를 강제로 이미지에 맞춤
+        if (img.clientWidth > 0 && img.clientHeight > 0) {
+          overlay.style.width = `${img.clientWidth}px`;
+          overlay.style.height = `${img.clientHeight}px`;
+          overlay.style.left = `${img.offsetLeft}px`;
+          overlay.style.top = `${img.offsetTop}px`;
+        }
+
         if (!isTextHidden && visibleWebtoonPages.has(idx)) {
           drawPageText(idx, img, overlay);
         }
@@ -801,7 +802,8 @@ hideTextButton.addEventListener('click', () => {
 
 btnHorizontalHover.addEventListener('click', () => {
   textMode = textMode === '가로' ? '호버' : '가로';
-  btnHorizontalHover.textContent = textMode === '가로' ? '가로모드' : '호버모드';
+  btnHorizontalHover.textContent =
+    textMode === '가로' ? '가로모드' : '호버모드';
   btnVerticalHover.textContent = '세로모드';
   applyTextOpacity();
   renderTextBoxes(isTextHidden);
@@ -889,6 +891,12 @@ function tryDrawWebtoonText(idx, img, overlay) {
     setTimeout(() => tryDrawWebtoonText(idx, img, overlay), 50);
     return;
   }
+
+  // [핵심 변경 2] 초기 로드 시에도 오버레이 위치/크기를 이미지와 완전히 맞춤
+  overlay.style.width = `${img.clientWidth}px`;
+  overlay.style.height = `${img.clientHeight}px`;
+  overlay.style.left = `${img.offsetLeft}px`;
+  overlay.style.top = `${img.offsetTop}px`;
 
   drawPageText(idx, img, overlay);
   applyTextOpacity();
