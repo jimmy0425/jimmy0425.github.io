@@ -346,6 +346,12 @@ toggleBtn.addEventListener('click', () => {
   isWebtoonMode = !isWebtoonMode;
   toggleBtn.textContent = isWebtoonMode ? '단일모드로 전환' : '웹툰모드 켜기';
   isToggling = true;
+
+  // [추가된 코드] 웹툰 모드 진입 시 강제로 fit-screen 및 확대 비율 초기화
+  if (isWebtoonMode) {
+    displayMode = 'fit-screen';
+    zoomFactor = 1;
+  }
   render();
 
   if (isWebtoonMode) {
