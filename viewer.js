@@ -151,7 +151,7 @@ function updateAllStyles() {
       applyStyles(img);
     }
   });
-  
+
   // 브라우저가 이미지 크기(layout)를 완전히 줄인 후 텍스트 박스를 그리도록 동기화
   requestAnimationFrame(() => {
     renderTextBoxes(isTextHidden);
@@ -180,7 +180,7 @@ function render() {
       const wrapper = document.createElement('div');
       wrapper.className = 'webtoon-wrapper';
       wrapper.dataset.index = idx;
-      
+
       // 오버레이 기준점 및 정렬 완벽 고정
       wrapper.style.position = 'relative';
       wrapper.style.display = 'flex';
@@ -202,7 +202,7 @@ function render() {
       img.onload = () => {
         applyStyles(img);
         wrapper.style.minHeight = '0';
-        wrapper.style.height = 'auto'; 
+        wrapper.style.height = 'auto';
         tryDrawWebtoonText(idx, img, localOverlay);
       };
 
@@ -397,12 +397,17 @@ toggleBtn.addEventListener('click', () => {
 });
 
 function applyZoom(multiplier) {
-  let currentWrapper = null;
+  let targetWrapper = null;
+
   if (isWebtoonMode) {
     const wrappers = viewerContainer.querySelectorAll('.webtoon-wrapper');
+    const centerY = window.innerHeight / 2; // 화면 중앙 픽셀 위치
+
+    // 화면 중앙에 위치한 페이지 찾기
     for (let wrapper of wrappers) {
-      if (wrapper.getBoundingClientRect().bottom > 0) {
-        currentWrapper = wrapper;
+      const rect = wrapper.getBoundingClientRect();
+      if (rect.top <= centerY && rect.bottom >= centerY) {
+        targetWrapper = wrapper;
         break;
       }
     }
@@ -411,9 +416,10 @@ function applyZoom(multiplier) {
   zoomFactor *= multiplier;
   updateAllStyles();
 
-  if (isWebtoonMode && currentWrapper) {
+  if (isWebtoonMode && targetWrapper) {
     requestAnimationFrame(() => {
-      currentWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
+      // 크기 변경 후, 기억해둔 페이지의 상단으로 스크롤 이동
+      targetWrapper.scrollIntoView({ block: 'start', behavior: 'auto' });
     });
   }
 }
