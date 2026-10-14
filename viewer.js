@@ -546,6 +546,24 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
   pageData.forEach((block) => {
     if (block.label === 'image' || !block.content) return;
 
+    // --- 특정 단어 6개 제외 로직 추가 ---
+    let contentText = block.content;
+    const excludeWords = [
+      '<table>',
+      '<tr>',
+      '<td>',
+      '</td>',
+      '</tr>',
+      '</table>',
+    ];
+    excludeWords.forEach((word) => {
+      contentText = contentText.split(word).join('');
+    });
+
+    // 태그를 제외한 후 텍스트가 비어있다면 해당 박스는 생성하지 않음
+    if (!contentText.trim()) return;
+    // -----------------------------------
+
     const [xmin, ymin, xmax, ymax] = block.bbox;
     const bx1 = Math.max(xmin, 0);
     const by1 = Math.max(ymin, 0);
@@ -598,7 +616,7 @@ function drawPaddleText(pageIndex, imgEl, targetLayer) {
     textBox.style.wordBreak = 'break-all';
     textBox.style.lineBreak = 'anywhere';
 
-    const sanitizedContent = block.content.replace(/\n/g, ' ');
+    const sanitizedContent = contentText.replace(/\n/g, ' ');
     const textLen = sanitizedContent.length;
     let computedFontSize =
       textLen > 0 ? Math.sqrt((bgWidth * bgHeight) / textLen) * 0.9 : 1;
